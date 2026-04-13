@@ -34,7 +34,7 @@ The project uses Python standard library only.
 
 ## Setup
 
-1. Copy `.env.example` values into your environment or a launcher.
+1. Copy `.env.example` to `.env` or export the same variables in your shell.
 2. Set at minimum:
    - `TELEGRAM_BOT_TOKEN`
    - `TELEGRAM_CHAT_ID`
@@ -44,6 +44,7 @@ The project uses Python standard library only.
 4. Run a dry-run:
 
 ```bash
+cp .env.example .env
 PYTHONPATH=src python3 -m digest_bot.main daily --dry-run
 PYTHONPATH=src python3 -m digest_bot.main weekly-openclaw --dry-run
 ```
@@ -84,6 +85,7 @@ Set the process timezone explicitly in the wrapper if your cron host does not al
 
 ## Notes
 
+- The app auto-loads a local `.env` file from the project root before reading environment variables.
 - If the LLM step is disabled or unavailable, the bot still produces a compact deterministic message.
 - If Telegram delivery fails, the message is appended to a local log file and the LLM step is not re-run.
 - Weekly OpenClaw checks send nothing if there is no new release.

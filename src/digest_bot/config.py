@@ -6,6 +6,25 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 
+def _load_dotenv(root: Path) -> None:
+    env_path = root / ".env"
+    if not env_path.exists():
+        return
+
+    for line in env_path.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            continue
+        key, value = stripped.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if not key:
+            continue
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {"\"", "'"}:
+            value = value[1:-1]
+        os.environ.setdefault(key, value)
+
+
 def _env_bool(name: str, default: bool) -> bool:
     raw = os.getenv(name)
     if raw is None:
@@ -34,6 +53,7 @@ class AppConfig:
 
 def load_config() -> AppConfig:
     root = Path.cwd()
+    _load_dotenv(root)
     state_dir = Path(os.getenv("STATE_DIR", "./state"))
     if not state_dir.is_absolute():
         state_dir = (root / state_dir).resolve()
