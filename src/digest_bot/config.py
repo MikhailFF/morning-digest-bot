@@ -1,0 +1,55 @@
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass
+from pathlib import Path
+from zoneinfo import ZoneInfo
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+@dataclass(frozen=True)
+class AppConfig:
+    timezone: str
+    openai_enabled: bool
+    openai_api_key: str
+    openai_api_base: str
+    openai_model: str
+    telegram_enabled: bool
+    telegram_bot_token: str
+    telegram_chat_id: str
+    state_dir: Path
+    openclaw_repo: str
+    quotes_file: Path
+
+    @property
+    def tzinfo(self) -> ZoneInfo:
+        return ZoneInfo(self.timezone)
+
+
+def load_config() -> AppConfig:
+    root = Path.cwd()
+    state_dir = Path(os.getenv("STATE_DIR", "./state"))
+    if not state_dir.is_absolute():
+        state_dir = (root / state_dir).resolve()
+
+    quotes_file = root / "data" / "quotes.txt"
+
+    return AppConfig(
+        timezone=os.getenv("DIGEST_TIMEZONE", "Europe/Moscow"),
+        openai_enabled=_env_bool("OPENAI_ENABLED", False),
+        openai_api_key=os.getenv("OPENAI_API_KEY", ""),
+        openai_api_base=os.getenv("OPENAI_API_BASE", "https://api.openai.com/v1").rstrip("/"),
+        openai_model=os.getenv("OPENAI_MODEL", "gpt-4.1-mini"),
+        telegram_enabled=_env_bool("TELEGRAM_ENABLED", False),
+        telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN", ""),
+        telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID", ""),
+        state_dir=state_dir,
+        openclaw_repo=os.getenv("OPENCLAW_REPO", "openclaw/openclaw"),
+        quotes_file=quotes_file,
+    )

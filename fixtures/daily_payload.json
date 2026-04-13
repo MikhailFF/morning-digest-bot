@@ -1,0 +1,93 @@
+{
+  "finance_items": [
+    {
+      "title": "US inflation cools faster than expected as services prices ease",
+      "source": "Reuters Markets",
+      "published_at": "2026-04-13T14:10:00Z",
+      "url": "https://example.com/finance-1",
+      "summary": "Fresh CPI data improved rate-cut expectations across global markets."
+    },
+    {
+      "title": "Oil extends losses after demand outlook is revised lower",
+      "source": "CNBC Finance",
+      "published_at": "2026-04-13T13:30:00Z",
+      "url": "https://example.com/finance-2",
+      "summary": "Energy traders repriced growth risk after weaker industrial data."
+    },
+    {
+      "title": "European stocks climb as banks lead broad rally",
+      "source": "Yahoo Finance",
+      "published_at": "2026-04-13T12:50:00Z",
+      "url": "https://example.com/finance-3",
+      "summary": "Financials outperformed after strong earnings guidance."
+    },
+    {
+      "title": "China export growth rebounds, supporting risk sentiment",
+      "source": "Reuters Markets",
+      "published_at": "2026-04-13T11:15:00Z",
+      "url": "https://example.com/finance-4",
+      "summary": "Trade data beat forecasts and supported Asia equity indices."
+    },
+    {
+      "title": "Treasury yields dip as investors rotate into bonds",
+      "source": "CNBC Finance",
+      "published_at": "2026-04-13T10:40:00Z",
+      "url": "https://example.com/finance-5",
+      "summary": "Lower yields reflected softer macro expectations and defensive positioning."
+    }
+  ],
+  "ai_items": [
+    {
+      "title": "Hugging Face releases a new lightweight inference toolkit",
+      "source": "Hugging Face Blog",
+      "published_at": "2026-04-13T15:05:00Z",
+      "url": "https://example.com/ai-1",
+      "summary": "The toolkit targets lower-cost deployments for small and midsize teams."
+    },
+    {
+      "title": "MIT researchers show gains in multimodal planning benchmarks",
+      "source": "MIT Technology Review",
+      "published_at": "2026-04-13T12:20:00Z",
+      "url": "https://example.com/ai-2",
+      "summary": "The work focuses on reducing hallucinations in long action chains."
+    },
+    {
+      "title": "The Verge highlights new AI browser assistants",
+      "source": "The Verge AI",
+      "published_at": "2026-04-13T09:55:00Z",
+      "url": "https://example.com/ai-3",
+      "summary": "Vendors are racing to package agent workflows into mainstream browsers."
+    }
+  ],
+  "quotes": {
+    "BTC": {
+      "symbol": "BTC",
+      "label": "BTC",
+      "price": 84500.12,
+      "change_24h": 2.41,
+      "suffix": "USD"
+    },
+    "ETH": {
+      "symbol": "ETH",
+      "label": "ETH",
+      "price": 4120.54,
+      "change_24h": 1.18,
+      "suffix": "USD"
+    },
+    "SOL": {
+      "symbol": "SOL",
+      "label": "SOL",
+      "price": 176.21,
+      "change_24h": -0.62,
+      "suffix": "USD"
+    },
+    "SPX": {
+      "symbol": "SPX",
+      "label": "S&P 500",
+      "price": 5284.77,
+      "change_24h": 0.37,
+      "suffix": "USD"
+    }
+  },
+  "quote_of_day": "Price is what you pay. Value is what you get. | Warren Buffett"
+}

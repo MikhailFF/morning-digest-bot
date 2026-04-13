@@ -1,0 +1,1 @@
+"""Morning digest bot package."""

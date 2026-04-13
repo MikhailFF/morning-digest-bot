@@ -1,0 +1,7 @@
+{
+  "version": "v1.8.0",
+  "title": "OpenClaw v1.8.0",
+  "published_at": "2026-04-13T08:15:00Z",
+  "url": "https://github.com/openclaw/openclaw/releases/tag/v1.8.0",
+  "notes": "Added a lighter agent runtime, improved retry handling for failed jobs, fixed Telegram delivery edge cases, and reduced memory use during long-running sessions."
+}
