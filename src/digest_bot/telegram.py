@@ -1,16 +1,17 @@
 from __future__ import annotations
 
 import json
+from typing import Literal
 from urllib.request import Request, urlopen
 
 from .config import AppConfig
 
 
-def send_telegram_message(config: AppConfig, message: str) -> bool:
+def send_telegram_message(config: AppConfig, message: str) -> Literal["sent", "disabled", "missing_config", "failed"]:
     if not config.telegram_enabled:
-        return False
+        return "disabled"
     if not config.telegram_bot_token or not config.telegram_chat_id:
-        return False
+        return "missing_config"
 
     url = f"https://api.telegram.org/bot{config.telegram_bot_token}/sendMessage"
     payload = {
@@ -27,6 +28,6 @@ def send_telegram_message(config: AppConfig, message: str) -> bool:
     try:
         with urlopen(request, timeout=30) as response:
             response.read()
-        return True
+        return "sent"
     except Exception:
-        return False
+        return "failed"

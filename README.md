@@ -34,7 +34,7 @@ The project uses Python standard library only.
 
 ## Setup
 
-1. Copy `.env.example` values into your environment or a launcher.
+1. Copy `.env.example` to `.env` or export the same variables in your shell.
 2. Set at minimum:
    - `TELEGRAM_BOT_TOKEN`
    - `TELEGRAM_CHAT_ID`
@@ -44,6 +44,7 @@ The project uses Python standard library only.
 4. Run a dry-run:
 
 ```bash
+cp .env.example .env
 PYTHONPATH=src python3 -m digest_bot.main daily --dry-run
 PYTHONPATH=src python3 -m digest_bot.main weekly-openclaw --dry-run
 ```
@@ -62,9 +63,22 @@ See `.env.example` for the full list. Important ones:
 - `DIGEST_TIMEZONE` - default `Europe/Moscow`
 - `OPENAI_ENABLED` - `true` or `false`
 - `OPENAI_MODEL` - default `gpt-4.1-mini`
+- `OPENAI_MAX_OUTPUT_TOKENS` - response cap for LLM formatting calls
 - `TELEGRAM_ENABLED` - `true` or `false`
 - `OPENCLAW_REPO` - default `openclaw/openclaw`
 - `STATE_DIR` - where state and fallback logs are stored
+- `QUOTE_ASSETS` - semicolon-separated list: `KEY|provider|instrument|label|suffix`
+
+`QUOTE_ASSETS` providers:
+
+- `coingecko` - instrument is CoinGecko id (example: `bitcoin`)
+- `yahoo` - instrument is Yahoo symbol (example: `^GSPC`, `GC=F`, `CL=F`, `DX-Y.NYB`, `EURUSD=X`)
+
+Example with additional assets:
+
+```env
+QUOTE_ASSETS=BTC|coingecko|bitcoin|BTC|USD;ETH|coingecko|ethereum|ETH|USD;SOL|coingecko|solana|SOL|USD;SPX|yahoo|^GSPC|S&P 500|USD;XAU|yahoo|GC=F|Gold|USD;OIL|yahoo|CL=F|Oil|USD;DXY|yahoo|DX-Y.NYB|US Dollar Index|pts;EURUSD|yahoo|EURUSD=X|EUR/USD|
+```
 
 ## Cron examples
 
@@ -84,6 +98,9 @@ Set the process timezone explicitly in the wrapper if your cron host does not al
 
 ## Notes
 
+- The app auto-loads a local `.env` file from the project root before reading environment variables.
+- Daily LLM prompts are compact JSON (lower token usage), and OpenClaw fallback skips LLM when release notes are too short.
 - If the LLM step is disabled or unavailable, the bot still produces a compact deterministic message.
+- If Telegram is disabled, the job exits cleanly without fallback error logs.
 - If Telegram delivery fails, the message is appended to a local log file and the LLM step is not re-run.
 - Weekly OpenClaw checks send nothing if there is no new release.
