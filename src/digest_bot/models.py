@@ -22,6 +22,15 @@ class QuoteSnapshot:
 
 
 @dataclass(frozen=True)
+class AssetSpec:
+    key: str
+    provider: str
+    instrument: str
+    label: str
+    suffix: str
+
+
+@dataclass(frozen=True)
 class OpenClawRelease:
     version: str
     title: str

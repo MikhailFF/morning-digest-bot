@@ -30,7 +30,7 @@ def build_daily_prompt(payload: dict) -> str:
         "Each news item must be one short line with source in parentheses.\n"
         "If a section has fewer items than requested, include only what exists.\n"
         "Do not use markdown tables.\n\n"
-        f"DATA:\n{json.dumps(payload, ensure_ascii=False, indent=2)}"
+        f"DATA:\n{json.dumps(payload, ensure_ascii=False, separators=(',', ':'))}"
     )
 
 
@@ -62,8 +62,11 @@ def fallback_daily_message(finance_items: list[NewsItem], ai_items: list[NewsIte
 
     parts.append("")
     parts.append("3) Котировки")
-    for symbol in ("BTC", "ETH", "SOL", "SPX"):
-        parts.append(fmt_quote(symbol))
+    if quotes:
+        for symbol in quotes:
+            parts.append(fmt_quote(symbol))
+    else:
+        parts.append("Нет данных по активам.")
 
     parts.append("")
     parts.append("4) Цитата дня")
@@ -72,6 +75,13 @@ def fallback_daily_message(finance_items: list[NewsItem], ai_items: list[NewsIte
 
 
 def build_openclaw_prompt(release: OpenClawRelease, previous_seen_version: str) -> str:
+    compact_release = {
+        "version": release.version,
+        "title": release.title,
+        "published_at": release.published_at,
+        "url": release.url,
+        "notes": release.notes[:1200],
+    }
     return (
         "You are formatting a short Russian Telegram note about a new OpenClaw release.\n"
         "Use only the supplied release data.\n"
@@ -79,7 +89,7 @@ def build_openclaw_prompt(release: OpenClawRelease, previous_seen_version: str) 
         "'ставить', 'можно подождать', 'не ставить сейчас'.\n"
         "Do not over-explain.\n\n"
         f"PREVIOUS_VERSION: {previous_seen_version or 'unknown'}\n"
-        f"DATA:\n{json.dumps(release.__dict__, ensure_ascii=False, indent=2)}"
+        f"DATA:\n{json.dumps(compact_release, ensure_ascii=False, separators=(',', ':'))}"
     )
 
 

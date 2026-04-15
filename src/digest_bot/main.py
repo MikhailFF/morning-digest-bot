@@ -8,10 +8,9 @@ from .config import load_config
 from .fetchers import (
     AI_RSS_SOURCES,
     FINANCE_RSS_SOURCES,
-    fetch_crypto_quotes,
+    fetch_asset_quotes,
     fetch_openclaw_release,
     fetch_rss_news,
-    fetch_sp500_quote,
     select_quote_of_day,
 )
 from .formatters import build_daily_prompt, build_openclaw_prompt, compact_payload, fallback_daily_message, fallback_openclaw_message
@@ -46,8 +45,7 @@ def run_daily(dry_run: bool, fixture_path: str | None) -> int:
     else:
         finance_items = fetch_rss_news(FINANCE_RSS_SOURCES, now_utc, limit=12)
         ai_items = fetch_rss_news(AI_RSS_SOURCES, now_utc, limit=8)
-        quotes = fetch_crypto_quotes()
-        quotes["SPX"] = fetch_sp500_quote()
+        quotes = fetch_asset_quotes(config.quote_assets)
         quote_of_day = select_quote_of_day(config.quotes_file, now_local.strftime("%Y-%m-%d"))
 
     payload = compact_payload(finance_items, ai_items, quotes, quote_of_day)
@@ -67,8 +65,8 @@ def run_daily(dry_run: bool, fixture_path: str | None) -> int:
         print("Digest unchanged for today; skipping duplicate send.")
         return 0
 
-    sent = send_telegram_message(config, message)
-    if sent:
+    send_status = send_telegram_message(config, message)
+    if send_status == "sent":
         write_json(
             digest_state_path,
             {
@@ -79,6 +77,14 @@ def run_daily(dry_run: bool, fixture_path: str | None) -> int:
         )
         print("Daily digest sent.")
         return 0
+
+    if send_status == "disabled":
+        print("Telegram delivery is disabled; skipping send.")
+        return 0
+
+    if send_status == "missing_config":
+        print("Telegram is enabled but TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID is missing.")
+        return 1
 
     log_path = append_fallback_log(config.state_dir, "daily_digest_failed", message)
     print(f"Telegram send failed; message saved to {log_path}")
@@ -101,16 +107,17 @@ def run_weekly_openclaw(dry_run: bool, fixture_path: str | None) -> int:
         print("No new OpenClaw release.")
         return 0
 
-    message = render_with_llm(config, build_openclaw_prompt(release, previous_seen_version))
-    if not message:
+    should_use_llm = len(release.notes.strip()) >= 120
+    message = render_with_llm(config, build_openclaw_prompt(release, previous_seen_version)) if should_use_llm else None
+    if message is None:
         message = fallback_openclaw_message(release)
 
     if dry_run:
         print(message)
         return 0
 
-    sent = send_telegram_message(config, message)
-    if sent:
+    send_status = send_telegram_message(config, message)
+    if send_status == "sent":
         write_json(
             state_path,
             {
@@ -121,6 +128,14 @@ def run_weekly_openclaw(dry_run: bool, fixture_path: str | None) -> int:
         )
         print("OpenClaw update sent.")
         return 0
+
+    if send_status == "disabled":
+        print("Telegram delivery is disabled; skipping send.")
+        return 0
+
+    if send_status == "missing_config":
+        print("Telegram is enabled but TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID is missing.")
+        return 1
 
     log_path = append_fallback_log(config.state_dir, "openclaw_failed", message)
     print(f"Telegram send failed; message saved to {log_path}")

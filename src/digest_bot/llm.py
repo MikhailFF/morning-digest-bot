@@ -13,6 +13,7 @@ def render_with_llm(config: AppConfig, prompt: str) -> str | None:
     body = {
         "model": config.openai_model,
         "input": prompt,
+        "max_output_tokens": config.openai_max_output_tokens,
     }
     request = Request(
         f"{config.openai_api_base}/responses",
