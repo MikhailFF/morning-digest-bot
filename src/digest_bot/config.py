@@ -20,6 +20,10 @@ class AppConfig:
     openai_api_key: str
     openai_api_base: str
     openai_model: str
+    openrouter_api_key: str
+    openrouter_model: str
+    openrouter_site_url: str
+    openrouter_app_name: str
     telegram_enabled: bool
     telegram_bot_token: str
     telegram_chat_id: str
@@ -46,6 +50,10 @@ def load_config() -> AppConfig:
         openai_api_key=os.getenv("OPENAI_API_KEY", ""),
         openai_api_base=os.getenv("OPENAI_API_BASE", "https://api.openai.com/v1").rstrip("/"),
         openai_model=os.getenv("OPENAI_MODEL", "gpt-4.1-mini"),
+        openrouter_api_key=os.getenv("OPENROUTER_API_KEY", ""),
+        openrouter_model=os.getenv("OPENROUTER_MODEL", "openai/gpt-4.1-mini"),
+        openrouter_site_url=os.getenv("OPENROUTER_SITE_URL", "https://github.com/MikhailFF/morning-digest-bot"),
+        openrouter_app_name=os.getenv("OPENROUTER_APP_NAME", "morning-digest-bot"),
         telegram_enabled=_env_bool("TELEGRAM_ENABLED", False),
         telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN", ""),
         telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID", ""),
