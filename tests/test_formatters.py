@@ -47,6 +47,8 @@ class FormatterTests(unittest.TestCase):
         self.assertIn("3) Котировки", message)
         self.assertIn("4) Цитата дня", message)
         self.assertIn("<b>Дайджест на", message)
+        self.assertIn('<a href="https://example.com/a">Rates stay high</a> (Reuters)', message)
+        self.assertIn('<a href="https://example.com/b">New AI model ships</a> (The Verge AI)', message)
 
     def test_fallback_daily_message_escapes_html(self) -> None:
         finance = [
@@ -78,6 +80,7 @@ class FormatterTests(unittest.TestCase):
         self.assertIn("Reuters &amp; Co", message)
         self.assertIn("Price &lt; Value", message)
         self.assertNotIn("Price < Value", message)
+        self.assertIn('<a href="https://example.com/a">Rates &lt;b&gt;stay&lt;/b&gt; high</a> (Reuters &amp; Co)', message)
 
 
 if __name__ == "__main__":
