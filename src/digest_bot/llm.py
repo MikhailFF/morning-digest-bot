@@ -96,8 +96,6 @@ def render_with_llm(config: AppConfig, prompt: str) -> str | None:
         return None
 
     return _extract_text_from_payload(payload)
-
-
 def translate_daily_content(config: AppConfig, prompt: str) -> dict[str, object] | None:
     response_text = render_with_llm(config, prompt)
     if not response_text:
