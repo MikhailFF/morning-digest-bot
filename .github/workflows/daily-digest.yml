@@ -19,10 +19,9 @@ jobs:
     env:
       DIGEST_TIMEZONE: Europe/Moscow
       TELEGRAM_ENABLED: "true"
-      OPENAI_ENABLED: ${{ secrets.OPENAI_API_KEY && 'true' || 'false' }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      OPENAI_API_BASE: ${{ secrets.OPENAI_API_BASE || 'https://api.openai.com/v1' }}
-      OPENAI_MODEL: ${{ secrets.OPENAI_MODEL || 'gpt-4.1-mini' }}
+      OPENAI_API_BASE: ${{ secrets.OPENAI_API_BASE }}
+      OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       STATE_DIR: ${{ github.workspace }}/state
@@ -48,6 +47,13 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$STATE_DIR"
+          if [[ -n "${OPENAI_API_KEY:-}" ]]; then
+            export OPENAI_ENABLED=true
+          else
+            export OPENAI_ENABLED=false
+          fi
+          export OPENAI_API_BASE="${OPENAI_API_BASE:-https://api.openai.com/v1}"
+          export OPENAI_MODEL="${OPENAI_MODEL:-gpt-4.1-mini}"
           for attempt in 1 2 3; do
             echo "daily digest attempt ${attempt}"
             if PYTHONPATH=src python3 -m digest_bot.main daily; then
