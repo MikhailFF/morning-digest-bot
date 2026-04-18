@@ -1,0 +1,69 @@
+name: Daily Digest
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: daily-digest-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  daily-digest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DIGEST_TIMEZONE: Europe/Moscow
+      TELEGRAM_ENABLED: "true"
+      OPENAI_ENABLED: ${{ secrets.OPENAI_API_KEY && 'true' || 'false' }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OPENAI_API_BASE: ${{ secrets.OPENAI_API_BASE || 'https://api.openai.com/v1' }}
+      OPENAI_MODEL: ${{ secrets.OPENAI_MODEL || 'gpt-4.1-mini' }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      STATE_DIR: ${{ github.workspace }}/state
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Restore digest state
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ github.workspace }}/state
+          key: daily-digest-state-${{ github.ref_name }}-${{ github.run_id }}
+          restore-keys: |
+            daily-digest-state-${{ github.ref_name }}-
+
+      - name: Run daily digest with retries
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$STATE_DIR"
+          for attempt in 1 2 3; do
+            echo "daily digest attempt ${attempt}"
+            if PYTHONPATH=src python3 -m digest_bot.main daily; then
+              exit 0
+            fi
+
+            if [[ "$attempt" -eq 3 ]]; then
+              exit 1
+            fi
+
+            sleep $((attempt * 20))
+          done
+
+      - name: Save digest state
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ github.workspace }}/state
+          key: daily-digest-state-${{ github.ref_name }}-${{ github.run_id }}

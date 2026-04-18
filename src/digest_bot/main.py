@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 from datetime import datetime, timezone
+from html import escape
 import json
 
 from .config import load_config
@@ -18,8 +19,18 @@ from .formatters import build_daily_prompt, build_openclaw_prompt, compact_paylo
 from .llm import render_with_llm
 from .models import NewsItem, OpenClawRelease, QuoteSnapshot
 from .storage import append_fallback_log, ensure_state_dir, read_json, write_json
-from .telegram import send_telegram_message
+from .telegram import TelegramSendResult, send_telegram_message
 from .utils import sha256_json
+
+SUSPICIOUS_LLM_PHRASES = (
+    "not financial advice",
+    "insert current price here",
+    "based on the provided data",
+    "i cannot",
+    "i can't",
+    "as an ai",
+    "financial advisor",
+)
 
 
 def _load_daily_fixture(path: str) -> tuple[list[NewsItem], list[NewsItem], dict[str, QuoteSnapshot], str]:
@@ -35,11 +46,80 @@ def _load_release_fixture(path: str) -> OpenClawRelease:
     return OpenClawRelease(**payload)
 
 
+def _delivery_config_error(dry_run: bool, config) -> str:
+    if dry_run:
+        return ""
+    if not config.telegram_enabled:
+        return "Telegram delivery is disabled. Set TELEGRAM_ENABLED=true for live runs."
+    if not config.telegram_bot_token or not config.telegram_chat_id:
+        return "Telegram delivery is enabled but TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID is missing."
+    return ""
+
+
+def _validate_daily_message(message: str) -> tuple[bool, str]:
+    stripped = message.strip()
+    if not stripped:
+        return False, "LLM returned an empty message."
+
+    lowered = stripped.casefold()
+    for phrase in SUSPICIOUS_LLM_PHRASES:
+        if phrase in lowered:
+            return False, f"LLM output contains suspicious phrase: {phrase!r}."
+
+    if "<" in stripped or ">" in stripped:
+        return False, "LLM output contains HTML-like markup."
+
+    required_sections = ("1)", "2)", "3)", "4)")
+    missing_sections = [section for section in required_sections if section not in stripped]
+    if missing_sections:
+        return False, f"LLM output is missing required sections: {', '.join(missing_sections)}."
+
+    if len([line for line in stripped.splitlines() if line.strip()]) < 8:
+        return False, "LLM output is too short for a full digest."
+
+    return True, ""
+
+
+def _build_daily_message(
+    config,
+    finance_items: list[NewsItem],
+    ai_items: list[NewsItem],
+    quotes: dict[str, QuoteSnapshot],
+    quote_of_day: str,
+    now_local: datetime,
+) -> str:
+    llm_message = render_with_llm(config, build_daily_prompt(compact_payload(finance_items, ai_items, quotes, quote_of_day)))
+    if llm_message:
+        is_valid, validation_error = _validate_daily_message(llm_message)
+        if is_valid:
+            return escape(llm_message)
+        append_fallback_log(
+            config.state_dir,
+            "daily_digest_validation_rejected",
+            f"{validation_error}\n{llm_message}",
+        )
+
+    return fallback_daily_message(finance_items, ai_items, quotes, quote_of_day, now_local)
+
+
+def _log_send_failure(config, name: str, send_result: TelegramSendResult, message: str) -> str:
+    log_path = append_fallback_log(
+        config.state_dir,
+        name,
+        f"reason: {send_result.error or 'unknown'}\n\n{message}",
+    )
+    return str(log_path)
+
+
 def run_daily(dry_run: bool, fixture_path: str | None) -> int:
     config = load_config()
     ensure_state_dir(config.state_dir)
     now_utc = datetime.now(timezone.utc)
     now_local = now_utc.astimezone(config.tzinfo)
+    delivery_error = _delivery_config_error(dry_run, config)
+    if delivery_error:
+        print(delivery_error)
+        return 1
 
     if fixture_path:
         finance_items, ai_items, quotes, quote_of_day = _load_daily_fixture(fixture_path)
@@ -55,9 +135,7 @@ def run_daily(dry_run: bool, fixture_path: str | None) -> int:
     digest_state_path = config.state_dir / "daily_digest_state.json"
     state = read_json(digest_state_path)
 
-    message = render_with_llm(config, build_daily_prompt(payload))
-    if not message:
-        message = fallback_daily_message(finance_items, ai_items, quotes, quote_of_day, now_local)
+    message = _build_daily_message(config, finance_items, ai_items, quotes, quote_of_day, now_local)
 
     if dry_run:
         print(message)
@@ -67,8 +145,8 @@ def run_daily(dry_run: bool, fixture_path: str | None) -> int:
         print("Digest unchanged for today; skipping duplicate send.")
         return 0
 
-    sent = send_telegram_message(config, message)
-    if sent:
+    send_result = send_telegram_message(config, message)
+    if send_result.ok:
         write_json(
             digest_state_path,
             {
@@ -80,7 +158,7 @@ def run_daily(dry_run: bool, fixture_path: str | None) -> int:
         print("Daily digest sent.")
         return 0
 
-    log_path = append_fallback_log(config.state_dir, "daily_digest_failed", message)
+    log_path = _log_send_failure(config, "daily_digest_failed", send_result, message)
     print(f"Telegram send failed; message saved to {log_path}")
     return 1
 
@@ -88,6 +166,11 @@ def run_daily(dry_run: bool, fixture_path: str | None) -> int:
 def run_weekly_openclaw(dry_run: bool, fixture_path: str | None) -> int:
     config = load_config()
     ensure_state_dir(config.state_dir)
+    delivery_error = _delivery_config_error(dry_run, config)
+    if delivery_error:
+        print(delivery_error)
+        return 1
+
     release = _load_release_fixture(fixture_path) if fixture_path else fetch_openclaw_release(config.openclaw_repo)
     if release is None:
         print("Could not fetch OpenClaw release.")
@@ -109,8 +192,8 @@ def run_weekly_openclaw(dry_run: bool, fixture_path: str | None) -> int:
         print(message)
         return 0
 
-    sent = send_telegram_message(config, message)
-    if sent:
+    send_result = send_telegram_message(config, message)
+    if send_result.ok:
         write_json(
             state_path,
             {
@@ -122,7 +205,7 @@ def run_weekly_openclaw(dry_run: bool, fixture_path: str | None) -> int:
         print("OpenClaw update sent.")
         return 0
 
-    log_path = append_fallback_log(config.state_dir, "openclaw_failed", message)
+    log_path = _log_send_failure(config, "openclaw_failed", send_result, message)
     print(f"Telegram send failed; message saved to {log_path}")
     return 1
 
