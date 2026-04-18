@@ -47,8 +47,8 @@ class FormatterTests(unittest.TestCase):
         self.assertIn("3) Котировки", message)
         self.assertIn("4) Цитата дня", message)
         self.assertIn("<b>Дайджест на", message)
-        self.assertIn('<a href="https://example.com/a">Rates stay high</a> (Reuters)', message)
-        self.assertIn('<a href="https://example.com/b">New AI model ships</a> (The Verge AI)', message)
+        self.assertIn('Rates stay high (<a href="https://example.com/a">Reuters</a>)', message)
+        self.assertIn('New AI model ships (<a href="https://example.com/b">The Verge AI</a>)', message)
 
     def test_fallback_daily_message_escapes_html(self) -> None:
         finance = [
@@ -80,7 +80,38 @@ class FormatterTests(unittest.TestCase):
         self.assertIn("Reuters &amp; Co", message)
         self.assertIn("Price &lt; Value", message)
         self.assertNotIn("Price < Value", message)
-        self.assertIn('<a href="https://example.com/a">Rates &lt;b&gt;stay&lt;/b&gt; high</a> (Reuters &amp; Co)', message)
+        self.assertIn('Rates &lt;b&gt;stay&lt;/b&gt; high (<a href="https://example.com/a">Reuters &amp; Co</a>)', message)
+
+    def test_fallback_daily_message_uses_translated_overrides(self) -> None:
+        finance = [
+            NewsItem(
+                title="Bank stock climbs",
+                source="Yahoo Finance",
+                published_at="2026-04-14T06:00:00Z",
+                url="https://example.com/a",
+                summary="Summary",
+            )
+        ]
+        ai = []
+        quotes = {
+            "BTC": QuoteSnapshot(symbol="BTC", label="BTC", price=80000.0, change_24h=1.5, suffix="USD"),
+            "ETH": QuoteSnapshot(symbol="ETH", label="ETH", price=4000.0, change_24h=-0.5, suffix="USD"),
+            "SOL": QuoteSnapshot(symbol="SOL", label="SOL", price=180.0, change_24h=3.2, suffix="USD"),
+            "SPX": QuoteSnapshot(symbol="SPX", label="S&P 500", price=5100.0, change_24h=0.4, suffix="USD"),
+        }
+
+        message = fallback_daily_message(
+            finance_items=finance,
+            ai_items=ai,
+            quotes=quotes,
+            quote_of_day="Well done is better than well said.",
+            now_local=datetime(2026, 4, 14, 9, 0, tzinfo=ZoneInfo("Europe/Moscow")),
+            translated_finance_titles=["Акции банка растут"],
+            translated_quote_of_day="Хорошо сделано лучше, чем хорошо сказано.",
+        )
+
+        self.assertIn('Акции банка растут (<a href="https://example.com/a">Yahoo Finance</a>)', message)
+        self.assertIn("Хорошо сделано лучше, чем хорошо сказано.", message)
 
 
 if __name__ == "__main__":

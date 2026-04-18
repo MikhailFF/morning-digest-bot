@@ -39,12 +39,38 @@ def build_daily_prompt(payload: dict) -> str:
     )
 
 
-def fallback_daily_message(finance_items: list[NewsItem], ai_items: list[NewsItem], quotes: dict[str, QuoteSnapshot], quote_of_day: str, now_local: datetime) -> str:
-    def fmt_news_item(index: int, item: NewsItem) -> str:
-        title = escape(item.title)
+def build_daily_translation_prompt(finance_items: list[NewsItem], ai_items: list[NewsItem], quote_of_day: str) -> str:
+    payload = {
+        "finance_titles": [item.title for item in finance_items[:5]],
+        "ai_titles": [item.title for item in ai_items[:3]],
+        "quote_of_day": quote_of_day,
+    }
+    return (
+        "Translate the supplied English text into natural Russian for a Telegram digest.\n"
+        "Return strict JSON only, without markdown fences or explanations.\n"
+        'Use exactly this shape: {"finance_titles":["..."],"ai_titles":["..."],"quote_of_day":"..."}.\n'
+        "Preserve the number of titles in each array.\n"
+        "Do not translate brand names or publication names unless there is a common Russian form.\n\n"
+        f"DATA:\n{json.dumps(payload, ensure_ascii=False, indent=2)}"
+    )
+
+
+def fallback_daily_message(
+    finance_items: list[NewsItem],
+    ai_items: list[NewsItem],
+    quotes: dict[str, QuoteSnapshot],
+    quote_of_day: str,
+    now_local: datetime,
+    *,
+    translated_finance_titles: list[str] | None = None,
+    translated_ai_titles: list[str] | None = None,
+    translated_quote_of_day: str | None = None,
+) -> str:
+    def fmt_news_item(index: int, item: NewsItem, translated_title: str | None) -> str:
+        title = escape((translated_title or item.title).strip())
         source = escape(item.source)
         url = escape(item.url)
-        return f'{index}. <a href="{url}">{title}</a> ({source})'
+        return f'{index}. {title} (<a href="{url}">{source}</a>)'
 
     def fmt_quote(symbol: str) -> str:
         quote = quotes[symbol]
@@ -59,7 +85,10 @@ def fallback_daily_message(finance_items: list[NewsItem], ai_items: list[NewsIte
     parts.append("<b>1) Финансы и экономика</b>")
     if finance_items:
         for index, item in enumerate(finance_items[:5], start=1):
-            parts.append(fmt_news_item(index, item))
+            translated_title = None
+            if translated_finance_titles and index <= len(translated_finance_titles):
+                translated_title = translated_finance_titles[index - 1]
+            parts.append(fmt_news_item(index, item, translated_title))
     else:
         parts.append("Нет достаточно свежих новостей.")
 
@@ -67,7 +96,10 @@ def fallback_daily_message(finance_items: list[NewsItem], ai_items: list[NewsIte
     parts.append("<b>2) ИИ</b>")
     if ai_items:
         for index, item in enumerate(ai_items[:3], start=1):
-            parts.append(fmt_news_item(index, item))
+            translated_title = None
+            if translated_ai_titles and index <= len(translated_ai_titles):
+                translated_title = translated_ai_titles[index - 1]
+            parts.append(fmt_news_item(index, item, translated_title))
     else:
         parts.append("Нет достаточно свежих новостей.")
 
@@ -78,7 +110,7 @@ def fallback_daily_message(finance_items: list[NewsItem], ai_items: list[NewsIte
 
     parts.append("")
     parts.append("<b>4) Цитата дня</b>")
-    parts.append(escape(quote_of_day))
+    parts.append(escape((translated_quote_of_day or quote_of_day).strip()))
     return "\n".join(parts)
 
 

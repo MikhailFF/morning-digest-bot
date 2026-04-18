@@ -39,3 +39,24 @@ def render_with_llm(config: AppConfig, prompt: str) -> str | None:
             if isinstance(text, str) and text.strip():
                 return text.strip()
     return None
+
+
+def translate_daily_content(config: AppConfig, prompt: str) -> dict[str, object] | None:
+    response_text = render_with_llm(config, prompt)
+    if not response_text:
+        return None
+
+    candidate = response_text.strip()
+    if candidate.startswith("```"):
+        lines = candidate.splitlines()
+        if len(lines) >= 3:
+            candidate = "\n".join(lines[1:-1]).strip()
+
+    try:
+        payload = json.loads(candidate)
+    except json.JSONDecodeError:
+        return None
+
+    if not isinstance(payload, dict):
+        return None
+    return payload
