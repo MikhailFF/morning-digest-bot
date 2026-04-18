@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 from datetime import datetime, timezone
-from html import escape
 import json
 
 from .config import load_config
@@ -15,8 +14,8 @@ from .fetchers import (
     fetch_sp500_quote,
     select_quote_of_day,
 )
-from .formatters import build_daily_prompt, build_openclaw_prompt, compact_payload, fallback_daily_message, fallback_openclaw_message
-from .llm import render_with_llm
+from .formatters import build_daily_prompt, build_daily_translation_prompt, build_openclaw_prompt, compact_payload, fallback_daily_message, fallback_openclaw_message
+from .llm import render_with_llm, translate_daily_content
 from .models import NewsItem, OpenClawRelease, QuoteSnapshot
 from .storage import append_fallback_log, ensure_state_dir, read_json, write_json
 from .telegram import TelegramSendResult, send_telegram_message
@@ -88,18 +87,39 @@ def _build_daily_message(
     quote_of_day: str,
     now_local: datetime,
 ) -> str:
-    llm_message = render_with_llm(config, build_daily_prompt(compact_payload(finance_items, ai_items, quotes, quote_of_day)))
-    if llm_message:
-        is_valid, validation_error = _validate_daily_message(llm_message)
-        if is_valid:
-            return escape(llm_message)
-        append_fallback_log(
-            config.state_dir,
-            "daily_digest_validation_rejected",
-            f"{validation_error}\n{llm_message}",
-        )
+    translated_finance_titles: list[str] | None = None
+    translated_ai_titles: list[str] | None = None
+    translated_quote_of_day: str | None = None
 
-    return fallback_daily_message(finance_items, ai_items, quotes, quote_of_day, now_local)
+    translation_payload = translate_daily_content(
+        config,
+        build_daily_translation_prompt(finance_items, ai_items, quote_of_day),
+    )
+    if translation_payload:
+        finance_payload = translation_payload.get("finance_titles")
+        ai_payload = translation_payload.get("ai_titles")
+        quote_payload = translation_payload.get("quote_of_day")
+
+        expected_finance_count = min(len(finance_items), 5)
+        expected_ai_count = min(len(ai_items), 3)
+
+        if isinstance(finance_payload, list) and len(finance_payload) == expected_finance_count:
+            translated_finance_titles = [str(item).strip() for item in finance_payload]
+        if isinstance(ai_payload, list) and len(ai_payload) == expected_ai_count:
+            translated_ai_titles = [str(item).strip() for item in ai_payload]
+        if isinstance(quote_payload, str) and quote_payload.strip():
+            translated_quote_of_day = quote_payload.strip()
+
+    return fallback_daily_message(
+        finance_items,
+        ai_items,
+        quotes,
+        quote_of_day,
+        now_local,
+        translated_finance_titles=translated_finance_titles,
+        translated_ai_titles=translated_ai_titles,
+        translated_quote_of_day=translated_quote_of_day,
+    )
 
 
 def _log_send_failure(config, name: str, send_result: TelegramSendResult, message: str) -> str:
