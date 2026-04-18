@@ -22,6 +22,7 @@ def build_daily_prompt(payload: dict) -> str:
         "Use only the provided data.\n"
         "Do not invent facts.\n"
         "Output in Russian.\n"
+        "Translate English news titles and the quote of the day into natural Russian.\n"
         "Keep it compact.\n"
         "Do not add disclaimers, caveats, or meta commentary.\n"
         "Do not write phrases like 'not financial advice', 'Insert current price here', or 'based on the provided data'.\n"
@@ -31,7 +32,7 @@ def build_daily_prompt(payload: dict) -> str:
         "2) 3 новости ИИ\n"
         "3) Котировки\n"
         "4) Цитата дня\n"
-        "Each news item must be one short line with source in parentheses.\n"
+        "Each news item must be one short line in the format: translated title (source) - full URL.\n"
         "If a section has fewer items than requested, include only what exists.\n"
         "Do not use markdown tables.\n\n"
         f"DATA:\n{json.dumps(payload, ensure_ascii=False, indent=2)}"
@@ -39,6 +40,12 @@ def build_daily_prompt(payload: dict) -> str:
 
 
 def fallback_daily_message(finance_items: list[NewsItem], ai_items: list[NewsItem], quotes: dict[str, QuoteSnapshot], quote_of_day: str, now_local: datetime) -> str:
+    def fmt_news_item(index: int, item: NewsItem) -> str:
+        title = escape(item.title)
+        source = escape(item.source)
+        url = escape(item.url)
+        return f'{index}. <a href="{url}">{title}</a> ({source})'
+
     def fmt_quote(symbol: str) -> str:
         quote = quotes[symbol]
         if quote.price is None:
@@ -52,7 +59,7 @@ def fallback_daily_message(finance_items: list[NewsItem], ai_items: list[NewsIte
     parts.append("<b>1) Финансы и экономика</b>")
     if finance_items:
         for index, item in enumerate(finance_items[:5], start=1):
-            parts.append(f"{index}. {escape(item.title)} ({escape(item.source)})")
+            parts.append(fmt_news_item(index, item))
     else:
         parts.append("Нет достаточно свежих новостей.")
 
@@ -60,7 +67,7 @@ def fallback_daily_message(finance_items: list[NewsItem], ai_items: list[NewsIte
     parts.append("<b>2) ИИ</b>")
     if ai_items:
         for index, item in enumerate(ai_items[:3], start=1):
-            parts.append(f"{index}. {escape(item.title)} ({escape(item.source)})")
+            parts.append(fmt_news_item(index, item))
     else:
         parts.append("Нет достаточно свежих новостей.")
 
