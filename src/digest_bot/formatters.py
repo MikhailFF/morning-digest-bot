@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from html import escape
 import json
 from datetime import datetime
 
@@ -22,6 +23,9 @@ def build_daily_prompt(payload: dict) -> str:
         "Do not invent facts.\n"
         "Output in Russian.\n"
         "Keep it compact.\n"
+        "Do not add disclaimers, caveats, or meta commentary.\n"
+        "Do not write phrases like 'not financial advice', 'Insert current price here', or 'based on the provided data'.\n"
+        "Do not use HTML tags.\n"
         "Structure exactly as:\n"
         "1) 5 главных новостей финансов и экономики\n"
         "2) 3 новости ИИ\n"
@@ -38,36 +42,36 @@ def fallback_daily_message(finance_items: list[NewsItem], ai_items: list[NewsIte
     def fmt_quote(symbol: str) -> str:
         quote = quotes[symbol]
         if quote.price is None:
-            return f"- {quote.label}: н/д"
+            return f"- {escape(quote.label)}: н/д"
         if quote.change_24h is None:
-            return f"- {quote.label}: {quote.price:.2f} {quote.suffix}"
-        return f"- {quote.label}: {quote.price:.2f} {quote.suffix} ({quote.change_24h:+.2f}%)"
+            return f"- {escape(quote.label)}: {quote.price:.2f} {escape(quote.suffix)}"
+        return f"- {escape(quote.label)}: {quote.price:.2f} {escape(quote.suffix)} ({quote.change_24h:+.2f}%)"
 
-    parts = [f"Дайджест на {now_local.strftime('%d.%m.%Y %H:%M')}"]
+    parts = [f"<b>Дайджест на {now_local.strftime('%d.%m.%Y %H:%M')}</b>"]
     parts.append("")
-    parts.append("1) Финансы и экономика")
+    parts.append("<b>1) Финансы и экономика</b>")
     if finance_items:
         for index, item in enumerate(finance_items[:5], start=1):
-            parts.append(f"{index}. {item.title} ({item.source})")
+            parts.append(f"{index}. {escape(item.title)} ({escape(item.source)})")
     else:
         parts.append("Нет достаточно свежих новостей.")
 
     parts.append("")
-    parts.append("2) ИИ")
+    parts.append("<b>2) ИИ</b>")
     if ai_items:
         for index, item in enumerate(ai_items[:3], start=1):
-            parts.append(f"{index}. {item.title} ({item.source})")
+            parts.append(f"{index}. {escape(item.title)} ({escape(item.source)})")
     else:
         parts.append("Нет достаточно свежих новостей.")
 
     parts.append("")
-    parts.append("3) Котировки")
+    parts.append("<b>3) Котировки</b>")
     for symbol in ("BTC", "ETH", "SOL", "SPX"):
         parts.append(fmt_quote(symbol))
 
     parts.append("")
-    parts.append("4) Цитата дня")
-    parts.append(quote_of_day)
+    parts.append("<b>4) Цитата дня</b>")
+    parts.append(escape(quote_of_day))
     return "\n".join(parts)
 
 
