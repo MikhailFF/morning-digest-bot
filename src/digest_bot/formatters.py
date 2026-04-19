@@ -6,6 +6,16 @@ from datetime import datetime
 
 from .models import NewsItem, OpenClawRelease, QuoteSnapshot
 
+QUOTE_DISPLAY_ORDER = (
+    ("BTC", "BTC"),
+    ("ETH", "ETH"),
+    ("SOL", "SOL"),
+    ("BRENT", "Brent"),
+    ("USDRUB", "USD/RUB"),
+    ("EURRUB", "EUR/RUB"),
+    ("SPX", "S&P 500"),
+)
+
 
 def compact_payload(finance_items: list[NewsItem], ai_items: list[NewsItem], quotes: dict[str, QuoteSnapshot], quote_of_day: str) -> dict:
     return {
@@ -73,6 +83,11 @@ def fallback_daily_message(
         return f'{index}. {title} (<a href="{url}">{source}</a>)'
 
     def fmt_quote(symbol: str) -> str:
+        if symbol not in quotes:
+            for quote_symbol, label in QUOTE_DISPLAY_ORDER:
+                if quote_symbol == symbol:
+                    return f"- {escape(label)}: н/д"
+            return f"- {escape(symbol)}: н/д"
         quote = quotes[symbol]
         if quote.price is None:
             return f"- {escape(quote.label)}: н/д"
@@ -105,7 +120,7 @@ def fallback_daily_message(
 
     parts.append("")
     parts.append("<b>3) Котировки</b>")
-    for symbol in ("BTC", "ETH", "SOL", "SPX"):
+    for symbol, _label in QUOTE_DISPLAY_ORDER:
         parts.append(fmt_quote(symbol))
 
     parts.append("")

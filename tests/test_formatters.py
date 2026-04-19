@@ -32,6 +32,9 @@ class FormatterTests(unittest.TestCase):
             "BTC": QuoteSnapshot(symbol="BTC", label="BTC", price=80000.0, change_24h=1.5, suffix="USD"),
             "ETH": QuoteSnapshot(symbol="ETH", label="ETH", price=4000.0, change_24h=-0.5, suffix="USD"),
             "SOL": QuoteSnapshot(symbol="SOL", label="SOL", price=180.0, change_24h=3.2, suffix="USD"),
+            "BRENT": QuoteSnapshot(symbol="BRENT", label="Brent", price=88.4, change_24h=-1.2, suffix="USD"),
+            "USDRUB": QuoteSnapshot(symbol="USDRUB", label="USD/RUB", price=92.5, change_24h=0.8, suffix="RUB"),
+            "EURRUB": QuoteSnapshot(symbol="EURRUB", label="EUR/RUB", price=99.7, change_24h=0.4, suffix="RUB"),
             "SPX": QuoteSnapshot(symbol="SPX", label="S&P 500", price=5100.0, change_24h=0.4, suffix="USD"),
         }
 
@@ -49,6 +52,9 @@ class FormatterTests(unittest.TestCase):
         self.assertIn("<b>Дайджест на", message)
         self.assertIn('Rates stay high (<a href="https://example.com/a">Reuters</a>)', message)
         self.assertIn('New AI model ships (<a href="https://example.com/b">The Verge AI</a>)', message)
+        self.assertIn("- Brent: 88.40 USD (-1.20%)", message)
+        self.assertIn("- USD/RUB: 92.50 RUB (+0.80%)", message)
+        self.assertIn("- EUR/RUB: 99.70 RUB (+0.40%)", message)
 
     def test_fallback_daily_message_escapes_html(self) -> None:
         finance = [
@@ -65,6 +71,9 @@ class FormatterTests(unittest.TestCase):
             "BTC": QuoteSnapshot(symbol="BTC", label="BTC", price=80000.0, change_24h=1.5, suffix="USD"),
             "ETH": QuoteSnapshot(symbol="ETH", label="ETH", price=4000.0, change_24h=-0.5, suffix="USD"),
             "SOL": QuoteSnapshot(symbol="SOL", label="SOL", price=180.0, change_24h=3.2, suffix="USD"),
+            "BRENT": QuoteSnapshot(symbol="BRENT", label="Brent", price=88.4, change_24h=-1.2, suffix="USD"),
+            "USDRUB": QuoteSnapshot(symbol="USDRUB", label="USD/RUB", price=92.5, change_24h=0.8, suffix="RUB"),
+            "EURRUB": QuoteSnapshot(symbol="EURRUB", label="EUR/RUB", price=99.7, change_24h=0.4, suffix="RUB"),
             "SPX": QuoteSnapshot(symbol="SPX", label="S&P 500", price=5100.0, change_24h=0.4, suffix="USD"),
         }
 
@@ -97,6 +106,9 @@ class FormatterTests(unittest.TestCase):
             "BTC": QuoteSnapshot(symbol="BTC", label="BTC", price=80000.0, change_24h=1.5, suffix="USD"),
             "ETH": QuoteSnapshot(symbol="ETH", label="ETH", price=4000.0, change_24h=-0.5, suffix="USD"),
             "SOL": QuoteSnapshot(symbol="SOL", label="SOL", price=180.0, change_24h=3.2, suffix="USD"),
+            "BRENT": QuoteSnapshot(symbol="BRENT", label="Brent", price=88.4, change_24h=-1.2, suffix="USD"),
+            "USDRUB": QuoteSnapshot(symbol="USDRUB", label="USD/RUB", price=92.5, change_24h=0.8, suffix="RUB"),
+            "EURRUB": QuoteSnapshot(symbol="EURRUB", label="EUR/RUB", price=99.7, change_24h=0.4, suffix="RUB"),
             "SPX": QuoteSnapshot(symbol="SPX", label="S&P 500", price=5100.0, change_24h=0.4, suffix="USD"),
         }
 

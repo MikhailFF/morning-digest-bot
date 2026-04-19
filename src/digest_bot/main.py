@@ -8,10 +8,13 @@ from .config import load_config
 from .fetchers import (
     AI_RSS_SOURCES,
     FINANCE_RSS_SOURCES,
+    fetch_brent_quote,
     fetch_crypto_quotes,
+    fetch_eur_rub_quote,
     fetch_openclaw_release,
     fetch_rss_news,
     fetch_sp500_quote,
+    fetch_usd_rub_quote,
     select_quote_of_day,
 )
 from .formatters import build_daily_prompt, build_daily_translation_prompt, build_openclaw_prompt, compact_payload, fallback_daily_message, fallback_openclaw_message
@@ -147,6 +150,9 @@ def run_daily(dry_run: bool, fixture_path: str | None) -> int:
         finance_items = fetch_rss_news(FINANCE_RSS_SOURCES, now_utc, limit=12)
         ai_items = fetch_rss_news(AI_RSS_SOURCES, now_utc, limit=8)
         quotes = fetch_crypto_quotes()
+        quotes["BRENT"] = fetch_brent_quote()
+        quotes["USDRUB"] = fetch_usd_rub_quote()
+        quotes["EURRUB"] = fetch_eur_rub_quote()
         quotes["SPX"] = fetch_sp500_quote()
         quote_of_day = select_quote_of_day(config.quotes_file, now_local.strftime("%Y-%m-%d"))
 
@@ -154,15 +160,14 @@ def run_daily(dry_run: bool, fixture_path: str | None) -> int:
     digest_hash = sha256_json(payload)
     digest_state_path = config.state_dir / "daily_digest_state.json"
     state = read_json(digest_state_path)
+    if state.get("last_date") == now_local.strftime("%Y-%m-%d"):
+        print("Daily digest already sent today; skipping duplicate send.")
+        return 0
 
     message = _build_daily_message(config, finance_items, ai_items, quotes, quote_of_day, now_local)
 
     if dry_run:
         print(message)
-        return 0
-
-    if state.get("last_digest_hash") == digest_hash and state.get("last_date") == now_local.strftime("%Y-%m-%d"):
-        print("Digest unchanged for today; skipping duplicate send.")
         return 0
 
     send_result = send_telegram_message(config, message)

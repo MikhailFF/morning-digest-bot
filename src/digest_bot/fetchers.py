@@ -4,6 +4,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
+from urllib.parse import quote
 from urllib.request import Request, urlopen
 import xml.etree.ElementTree as ET
 
@@ -130,8 +131,8 @@ def fetch_crypto_quotes() -> dict[str, QuoteSnapshot]:
     return quotes
 
 
-def fetch_sp500_quote() -> QuoteSnapshot:
-    url = "https://query1.finance.yahoo.com/v8/finance/chart/%5EGSPC?interval=1d&range=2d"
+def _fetch_yahoo_chart_quote(ticker: str, symbol: str, label: str, suffix: str) -> QuoteSnapshot:
+    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{quote(ticker, safe='')}?interval=1d&range=2d"
     try:
         payload = json.loads(_http_get(url).decode("utf-8"))
         result = payload["chart"]["result"][0]
@@ -144,12 +145,28 @@ def fetch_sp500_quote() -> QuoteSnapshot:
         change = None
 
     return QuoteSnapshot(
-        symbol="SPX",
-        label="S&P 500",
+        symbol=symbol,
+        label=label,
         price=price,
         change_24h=change,
-        suffix="USD",
+        suffix=suffix,
     )
+
+
+def fetch_sp500_quote() -> QuoteSnapshot:
+    return _fetch_yahoo_chart_quote("^GSPC", "SPX", "S&P 500", "USD")
+
+
+def fetch_brent_quote() -> QuoteSnapshot:
+    return _fetch_yahoo_chart_quote("BZ=F", "BRENT", "Brent", "USD")
+
+
+def fetch_usd_rub_quote() -> QuoteSnapshot:
+    return _fetch_yahoo_chart_quote("USDRUB=X", "USDRUB", "USD/RUB", "RUB")
+
+
+def fetch_eur_rub_quote() -> QuoteSnapshot:
+    return _fetch_yahoo_chart_quote("EURRUB=X", "EURRUB", "EUR/RUB", "RUB")
 
 
 def select_quote_of_day(quotes_file: Path, day_key: str) -> str:
