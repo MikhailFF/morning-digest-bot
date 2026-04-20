@@ -77,7 +77,13 @@ def _validate_daily_message(message: str) -> tuple[bool, str]:
         if phrase in lowered:
             return False, f"LLM output contains suspicious phrase: {phrase!r}."
 
-    if "<" in stripped or ">" in stripped:
+    # Ignore the known HTML tags we emit in the deterministic formatter
+    # (bold headers, links, italic author line, and collapsible blockquotes for
+    # the quote of the day and per-item summaries).
+    sanitized = re.sub(
+        r"</?(?:b|i|a|blockquote)(?:\s+[^>]*)?>", "", stripped, flags=re.IGNORECASE
+    )
+    if "<" in sanitized or ">" in sanitized:
         return False, "LLM output contains HTML-like markup."
 
     section_numbers = [int(match.group(1)) for match in re.finditer(r"(?m)^(\d+)\)", stripped)]
@@ -104,6 +110,10 @@ def _build_daily_message(
     translated_stock_focus_titles: list[str] | None = None
     translated_crypto_titles: list[str] | None = None
     translated_ai_titles: list[str] | None = None
+    translated_finance_summaries: list[str] | None = None
+    translated_stock_focus_summaries: list[str] | None = None
+    translated_crypto_summaries: list[str] | None = None
+    translated_ai_summaries: list[str] | None = None
     translated_quote_of_day: str | None = None
 
     translation_payload = translate_daily_content(
@@ -111,25 +121,27 @@ def _build_daily_message(
         build_daily_translation_prompt(finance_items, single_stock_items, crypto_items, ai_items, quote_of_day),
     )
     if translation_payload:
-        finance_payload = translation_payload.get("finance_titles")
-        stock_focus_payload = translation_payload.get("stock_focus_titles")
-        crypto_payload = translation_payload.get("crypto_titles")
-        ai_payload = translation_payload.get("ai_titles")
-        quote_payload = translation_payload.get("quote_of_day")
+        def _extract_list(key: str, expected_count: int) -> list[str] | None:
+            raw = translation_payload.get(key)
+            if isinstance(raw, list) and len(raw) == expected_count:
+                return [str(item).strip() for item in raw]
+            return None
 
         expected_finance_count = min(len(finance_items), 5)
         expected_stock_focus_count = min(len(single_stock_items), 3)
         expected_crypto_count = min(len(crypto_items), 3)
         expected_ai_count = min(len(ai_items), 3)
 
-        if isinstance(finance_payload, list) and len(finance_payload) == expected_finance_count:
-            translated_finance_titles = [str(item).strip() for item in finance_payload]
-        if isinstance(stock_focus_payload, list) and len(stock_focus_payload) == expected_stock_focus_count:
-            translated_stock_focus_titles = [str(item).strip() for item in stock_focus_payload]
-        if isinstance(crypto_payload, list) and len(crypto_payload) == expected_crypto_count:
-            translated_crypto_titles = [str(item).strip() for item in crypto_payload]
-        if isinstance(ai_payload, list) and len(ai_payload) == expected_ai_count:
-            translated_ai_titles = [str(item).strip() for item in ai_payload]
+        translated_finance_titles = _extract_list("finance_titles", expected_finance_count)
+        translated_stock_focus_titles = _extract_list("stock_focus_titles", expected_stock_focus_count)
+        translated_crypto_titles = _extract_list("crypto_titles", expected_crypto_count)
+        translated_ai_titles = _extract_list("ai_titles", expected_ai_count)
+        translated_finance_summaries = _extract_list("finance_summaries", expected_finance_count)
+        translated_stock_focus_summaries = _extract_list("stock_focus_summaries", expected_stock_focus_count)
+        translated_crypto_summaries = _extract_list("crypto_summaries", expected_crypto_count)
+        translated_ai_summaries = _extract_list("ai_summaries", expected_ai_count)
+
+        quote_payload = translation_payload.get("quote_of_day")
         if isinstance(quote_payload, str) and quote_payload.strip():
             translated_quote_of_day = quote_payload.strip()
 
@@ -145,6 +157,10 @@ def _build_daily_message(
         translated_stock_focus_titles=translated_stock_focus_titles,
         translated_crypto_titles=translated_crypto_titles,
         translated_ai_titles=translated_ai_titles,
+        translated_finance_summaries=translated_finance_summaries,
+        translated_stock_focus_summaries=translated_stock_focus_summaries,
+        translated_crypto_summaries=translated_crypto_summaries,
+        translated_ai_summaries=translated_ai_summaries,
         translated_quote_of_day=translated_quote_of_day,
     )
 

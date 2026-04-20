@@ -273,6 +273,155 @@ class FormatterTests(unittest.TestCase):
         self.assertIn("US Senate advances stablecoin bill", prompt)
         self.assertIn("preserve that delimiter", prompt)
 
+    def test_fallback_daily_message_appends_expandable_summary_when_available(self) -> None:
+        finance = [
+            NewsItem(
+                title="Rates stay high",
+                source="Reuters",
+                published_at="2026-04-14T06:00:00Z",
+                url="https://example.com/a",
+                summary="The Fed held rates steady. Officials signalled caution. Markets priced in a pause.",
+            )
+        ]
+        quotes = {
+            "BTC": QuoteSnapshot(symbol="BTC", label="BTC", price=80000.0, change_24h=1.5, suffix="USD"),
+            "ETH": QuoteSnapshot(symbol="ETH", label="ETH", price=4000.0, change_24h=-0.5, suffix="USD"),
+            "SOL": QuoteSnapshot(symbol="SOL", label="SOL", price=180.0, change_24h=3.2, suffix="USD"),
+            "BRENT": QuoteSnapshot(symbol="BRENT", label="Brent", price=88.4, change_24h=-1.2, suffix="USD"),
+            "USDRUB": QuoteSnapshot(symbol="USDRUB", label="USD/RUB", price=92.5, change_24h=0.8, suffix="RUB"),
+            "EURRUB": QuoteSnapshot(symbol="EURRUB", label="EUR/RUB", price=99.7, change_24h=0.4, suffix="RUB"),
+            "SPX": QuoteSnapshot(symbol="SPX", label="S&P 500", price=5100.0, change_24h=0.4, suffix="USD"),
+        }
+
+        message = fallback_daily_message(
+            finance_items=finance,
+            single_stock_items=[],
+            crypto_items=[],
+            ai_items=[],
+            quotes=quotes,
+            quote_of_day="Stay focused.",
+            now_local=datetime(2026, 4, 14, 9, 0, tzinfo=ZoneInfo("Europe/Moscow")),
+            translated_finance_titles=["Ставки остаются высокими"],
+            translated_finance_summaries=[
+                "ФРС сохранила ставку. Чиновники призвали к осторожности. Рынок закладывает паузу."
+            ],
+        )
+
+        self.assertIn(
+            "<blockquote expandable>ФРС сохранила ставку. Чиновники призвали к осторожности. Рынок закладывает паузу.</blockquote>",
+            message,
+        )
+
+    def test_fallback_daily_message_falls_back_to_original_summary(self) -> None:
+        finance = [
+            NewsItem(
+                title="Rates stay high",
+                source="Reuters",
+                published_at="2026-04-14T06:00:00Z",
+                url="https://example.com/a",
+                summary="The Fed held rates steady for a third month.",
+            )
+        ]
+        quotes = {
+            "BTC": QuoteSnapshot(symbol="BTC", label="BTC", price=80000.0, change_24h=1.5, suffix="USD"),
+            "ETH": QuoteSnapshot(symbol="ETH", label="ETH", price=4000.0, change_24h=-0.5, suffix="USD"),
+            "SOL": QuoteSnapshot(symbol="SOL", label="SOL", price=180.0, change_24h=3.2, suffix="USD"),
+            "BRENT": QuoteSnapshot(symbol="BRENT", label="Brent", price=88.4, change_24h=-1.2, suffix="USD"),
+            "USDRUB": QuoteSnapshot(symbol="USDRUB", label="USD/RUB", price=92.5, change_24h=0.8, suffix="RUB"),
+            "EURRUB": QuoteSnapshot(symbol="EURRUB", label="EUR/RUB", price=99.7, change_24h=0.4, suffix="RUB"),
+            "SPX": QuoteSnapshot(symbol="SPX", label="S&P 500", price=5100.0, change_24h=0.4, suffix="USD"),
+        }
+
+        message = fallback_daily_message(
+            finance_items=finance,
+            single_stock_items=[],
+            crypto_items=[],
+            ai_items=[],
+            quotes=quotes,
+            quote_of_day="Stay focused.",
+            now_local=datetime(2026, 4, 14, 9, 0, tzinfo=ZoneInfo("Europe/Moscow")),
+        )
+
+        self.assertIn(
+            "<blockquote expandable>The Fed held rates steady for a third month.</blockquote>",
+            message,
+        )
+
+    def test_fallback_daily_message_omits_summary_block_when_empty(self) -> None:
+        finance = [
+            NewsItem(
+                title="Rates stay high",
+                source="Reuters",
+                published_at="2026-04-14T06:00:00Z",
+                url="https://example.com/a",
+                summary="",
+            )
+        ]
+        quotes = {
+            "BTC": QuoteSnapshot(symbol="BTC", label="BTC", price=80000.0, change_24h=1.5, suffix="USD"),
+            "ETH": QuoteSnapshot(symbol="ETH", label="ETH", price=4000.0, change_24h=-0.5, suffix="USD"),
+            "SOL": QuoteSnapshot(symbol="SOL", label="SOL", price=180.0, change_24h=3.2, suffix="USD"),
+            "BRENT": QuoteSnapshot(symbol="BRENT", label="Brent", price=88.4, change_24h=-1.2, suffix="USD"),
+            "USDRUB": QuoteSnapshot(symbol="USDRUB", label="USD/RUB", price=92.5, change_24h=0.8, suffix="RUB"),
+            "EURRUB": QuoteSnapshot(symbol="EURRUB", label="EUR/RUB", price=99.7, change_24h=0.4, suffix="RUB"),
+            "SPX": QuoteSnapshot(symbol="SPX", label="S&P 500", price=5100.0, change_24h=0.4, suffix="USD"),
+        }
+
+        message = fallback_daily_message(
+            finance_items=finance,
+            single_stock_items=[],
+            crypto_items=[],
+            ai_items=[],
+            quotes=quotes,
+            quote_of_day="Stay focused.",
+            now_local=datetime(2026, 4, 14, 9, 0, tzinfo=ZoneInfo("Europe/Moscow")),
+        )
+
+        self.assertNotIn("<blockquote expandable>", message)
+
+    def test_build_daily_translation_prompt_includes_summary_arrays(self) -> None:
+        prompt = build_daily_translation_prompt(
+            finance_items=[
+                NewsItem(
+                    title="Rates stay high",
+                    source="Reuters",
+                    published_at="2026-04-14T06:00:00Z",
+                    url="https://example.com/a",
+                    summary="The Fed held rates steady.",
+                )
+            ],
+            single_stock_items=[],
+            crypto_items=[],
+            ai_items=[],
+            quote_of_day="Stay focused.",
+        )
+
+        self.assertIn('"finance_summaries":', prompt)
+        self.assertIn('"ai_summaries":', prompt)
+        self.assertIn("The Fed held rates steady.", prompt)
+        self.assertIn("at most 3 sentences", prompt)
+
+
+class UtilsSummaryTests(unittest.TestCase):
+    def test_truncate_to_sentences_keeps_first_three(self) -> None:
+        from digest_bot.utils import truncate_to_sentences
+
+        result = truncate_to_sentences(
+            "First sentence. Second sentence. Third sentence. Fourth sentence.",
+            max_sentences=3,
+        )
+
+        self.assertEqual("First sentence. Second sentence. Third sentence.", result)
+
+    def test_truncate_to_sentences_hard_caps_very_long_text(self) -> None:
+        from digest_bot.utils import truncate_to_sentences
+
+        long = "A" * 400
+        result = truncate_to_sentences(long, max_sentences=3, max_chars=100)
+
+        self.assertEqual(100, len(result))
+        self.assertTrue(result.endswith("\u2026"))
+
 
 if __name__ == "__main__":
     unittest.main()
