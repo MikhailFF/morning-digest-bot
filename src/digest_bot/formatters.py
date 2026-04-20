@@ -16,6 +16,13 @@ QUOTE_DISPLAY_ORDER = (
     ("SPX", "S&P 500"),
 )
 
+FINANCE_SECTION_TITLE = "🪙 Финансы и экономика"
+STOCK_FOCUS_SECTION_TITLE = "💸 Акции в фокусе"
+CRYPTO_FOCUS_SECTION_TITLE = "💎 Крипта в фокусе"
+AI_SECTION_TITLE = "🤖 ИИ"
+QUOTES_SECTION_TITLE = "📈 Котировки"
+QUOTE_OF_DAY_SECTION_TITLE = "👨🏻‍🎓 Цитата дня"
+
 
 def compact_payload(
     finance_items: list[NewsItem],
@@ -47,12 +54,12 @@ def build_daily_prompt(payload: dict) -> str:
         "Do not write phrases like 'not financial advice', 'Insert current price here', or 'based on the provided data'.\n"
         "Do not use HTML tags.\n"
         "Structure exactly as:\n"
-        "1) 5 главных новостей финансов и экономики\n"
-        "2) Акции в фокусе (only if single_stock_items is not empty)\n"
-        "3) Крипто в фокусе (only if crypto_items is not empty)\n"
-        "4) 3 новости ИИ\n"
-        "5) Котировки\n"
-        "6) Цитата дня\n"
+        f"1) {FINANCE_SECTION_TITLE}\n"
+        f"2) {STOCK_FOCUS_SECTION_TITLE} (only if single_stock_items is not empty)\n"
+        f"3) {CRYPTO_FOCUS_SECTION_TITLE} (only if crypto_items is not empty)\n"
+        f"4) {AI_SECTION_TITLE}\n"
+        f"5) {QUOTES_SECTION_TITLE}\n"
+        f"6) {QUOTE_OF_DAY_SECTION_TITLE}\n"
         "Each news item must be one short line in the format: translated title (source) - full URL.\n"
         "If a section has fewer items than requested, include only what exists.\n"
         "Do not use markdown tables.\n\n"
@@ -140,7 +147,7 @@ def fallback_daily_message(
     parts.append("")
     section_number = 1
 
-    parts.append(f"<b>{section_number}) Финансы и экономика</b>")
+    parts.append(f"<b>{section_number}) {FINANCE_SECTION_TITLE}</b>")
     if finance_items:
         for index, item in enumerate(finance_items[:5], start=1):
             translated_title = None
@@ -153,7 +160,7 @@ def fallback_daily_message(
 
     if single_stock_items:
         parts.append("")
-        parts.append(f"<b>{section_number}) Акции в фокусе</b>")
+        parts.append(f"<b>{section_number}) {STOCK_FOCUS_SECTION_TITLE}</b>")
         for index, item in enumerate(single_stock_items[:3], start=1):
             translated_title = None
             if translated_stock_focus_titles and index <= len(translated_stock_focus_titles):
@@ -163,7 +170,7 @@ def fallback_daily_message(
 
     parts.append("")
     if crypto_items:
-        parts.append(f"<b>{section_number}) Крипто в фокусе</b>")
+        parts.append(f"<b>{section_number}) {CRYPTO_FOCUS_SECTION_TITLE}</b>")
         for index, item in enumerate(crypto_items[:3], start=1):
             translated_title = None
             if translated_crypto_titles and index <= len(translated_crypto_titles):
@@ -172,7 +179,7 @@ def fallback_daily_message(
         section_number += 1
         parts.append("")
 
-    parts.append(f"<b>{section_number}) ИИ</b>")
+    parts.append(f"<b>{section_number}) {AI_SECTION_TITLE}</b>")
     if ai_items:
         for index, item in enumerate(ai_items[:3], start=1):
             translated_title = None
@@ -184,13 +191,13 @@ def fallback_daily_message(
     section_number += 1
 
     parts.append("")
-    parts.append(f"<b>{section_number}) Котировки</b>")
+    parts.append(f"<b>{section_number}) {QUOTES_SECTION_TITLE}</b>")
     for symbol, _label in QUOTE_DISPLAY_ORDER:
         parts.append(fmt_quote(symbol))
     section_number += 1
 
     parts.append("")
-    parts.append(f"<b>{section_number}) Цитата дня</b>")
+    parts.append(f"<b>{section_number}) {QUOTE_OF_DAY_SECTION_TITLE}</b>")
     parts.extend(fmt_quote_of_day(translated_quote_of_day or quote_of_day))
     return "\n".join(parts)
 
