@@ -7,8 +7,9 @@ from datetime import datetime
 from .models import NewsItem, OpenClawRelease, QuoteSnapshot
 from .utils import truncate_to_sentences
 
-SUMMARY_MAX_SENTENCES = 3
-SUMMARY_MAX_CHARS = 320
+SUMMARY_MAX_SENTENCES = 2
+SUMMARY_MAX_CHARS = 160
+TELEGRAM_MESSAGE_LIMIT = 4096
 
 QUOTE_DISPLAY_ORDER = (
     ("BTC", "BTC"),
@@ -103,7 +104,7 @@ def build_daily_translation_prompt(
         '"crypto_titles":["..."],"crypto_summaries":["..."],'
         '"ai_titles":["..."],"ai_summaries":["..."],"quote_of_day":"..."}.\n'
         "Preserve the number of entries in each array; align each *_summaries[i] with *_titles[i].\n"
-        "Each summary must be natural Russian, at most 3 sentences and at most 320 characters, conveying the core fact only.\n"
+        "Each summary must be natural Russian, at most 2 sentences and at most 160 characters, conveying the core fact only.\n"
         "If a source summary is empty, return an empty string at the same index.\n"
         "If quote_of_day contains '|' between the quote text and author, preserve that delimiter in the translated quote_of_day.\n"
         "Do not translate brand names or publication names unless there is a common Russian form.\n\n"
@@ -260,7 +261,30 @@ def fallback_daily_message(
     parts.append("")
     parts.append(f"<b>{section_number}) {QUOTE_OF_DAY_SECTION_TITLE}</b>")
     parts.extend(fmt_quote_of_day(translated_quote_of_day or quote_of_day))
-    return "\n".join(parts)
+    return _enforce_telegram_limit(parts)
+
+
+def _enforce_telegram_limit(parts: list[str]) -> str:
+    """Return the joined message, peeling off summaries if over the Telegram cap.
+
+    Summaries are optional "nice to have" context. When the combined message
+    exceeds Telegram's 4096-character limit we drop them one-by-one starting
+    from the last item, preserving the critical headline+link lines.
+    """
+    working = list(parts)
+    if len("\n".join(working)) <= TELEGRAM_MESSAGE_LIMIT:
+        return "\n".join(working)
+
+    summary_indexes = [
+        i for i, line in enumerate(working) if line.startswith("<blockquote expandable>")
+    ]
+    for idx in reversed(summary_indexes):
+        working[idx] = None  # marker for removal
+        trimmed = "\n".join(line for line in working if line is not None)
+        if len(trimmed) <= TELEGRAM_MESSAGE_LIMIT:
+            return trimmed
+    trimmed = "\n".join(line for line in working if line is not None)
+    return trimmed[:TELEGRAM_MESSAGE_LIMIT]
 
 
 def build_openclaw_prompt(release: OpenClawRelease, previous_seen_version: str) -> str:

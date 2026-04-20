@@ -280,7 +280,7 @@ class FormatterTests(unittest.TestCase):
                 source="Reuters",
                 published_at="2026-04-14T06:00:00Z",
                 url="https://example.com/a",
-                summary="The Fed held rates steady. Officials signalled caution. Markets priced in a pause.",
+                summary="The Fed held rates steady. Officials signalled caution.",
             )
         ]
         quotes = {
@@ -303,12 +303,12 @@ class FormatterTests(unittest.TestCase):
             now_local=datetime(2026, 4, 14, 9, 0, tzinfo=ZoneInfo("Europe/Moscow")),
             translated_finance_titles=["Ставки остаются высокими"],
             translated_finance_summaries=[
-                "ФРС сохранила ставку. Чиновники призвали к осторожности. Рынок закладывает паузу."
+                "ФРС сохранила ставку. Чиновники призвали к осторожности."
             ],
         )
 
         self.assertIn(
-            "<blockquote expandable>ФРС сохранила ставку. Чиновники призвали к осторожности. Рынок закладывает паузу.</blockquote>",
+            "<blockquote expandable>ФРС сохранила ставку. Чиновники призвали к осторожности.</blockquote>",
             message,
         )
 
@@ -399,19 +399,88 @@ class FormatterTests(unittest.TestCase):
         self.assertIn('"finance_summaries":', prompt)
         self.assertIn('"ai_summaries":', prompt)
         self.assertIn("The Fed held rates steady.", prompt)
-        self.assertIn("at most 3 sentences", prompt)
+        self.assertIn("at most 2 sentences", prompt)
+
+
+    def test_fallback_daily_message_stays_under_telegram_limit_by_peeling_summaries(
+        self,
+    ) -> None:
+        long_summary = "Важное событие в экономике. " * 20  # ~540 chars
+        finance = [
+            NewsItem(
+                title=f"News {i}",
+                source="Src",
+                published_at="2026-04-14T06:00:00Z",
+                url=f"https://example.com/{i}",
+                summary=long_summary,
+            )
+            for i in range(5)
+        ]
+        stock = [
+            NewsItem(
+                title=f"Stock {i}",
+                source="Src",
+                published_at="2026-04-14T06:00:00Z",
+                url=f"https://example.com/s{i}",
+                summary=long_summary,
+            )
+            for i in range(3)
+        ]
+        crypto = [
+            NewsItem(
+                title=f"Crypto {i}",
+                source="Src",
+                published_at="2026-04-14T06:00:00Z",
+                url=f"https://example.com/c{i}",
+                summary=long_summary,
+            )
+            for i in range(3)
+        ]
+        ai = [
+            NewsItem(
+                title=f"AI {i}",
+                source="Src",
+                published_at="2026-04-14T06:00:00Z",
+                url=f"https://example.com/a{i}",
+                summary=long_summary,
+            )
+            for i in range(3)
+        ]
+        quotes = {
+            "BTC": QuoteSnapshot(symbol="BTC", label="BTC", price=80000.0, change_24h=1.5, suffix="USD"),
+            "ETH": QuoteSnapshot(symbol="ETH", label="ETH", price=4000.0, change_24h=-0.5, suffix="USD"),
+            "SOL": QuoteSnapshot(symbol="SOL", label="SOL", price=180.0, change_24h=3.2, suffix="USD"),
+            "BRENT": QuoteSnapshot(symbol="BRENT", label="Brent", price=88.4, change_24h=-1.2, suffix="USD"),
+            "USDRUB": QuoteSnapshot(symbol="USDRUB", label="USD/RUB", price=92.5, change_24h=0.8, suffix="RUB"),
+            "EURRUB": QuoteSnapshot(symbol="EURRUB", label="EUR/RUB", price=99.7, change_24h=0.4, suffix="RUB"),
+            "SPX": QuoteSnapshot(symbol="SPX", label="S&P 500", price=5100.0, change_24h=0.4, suffix="USD"),
+        }
+
+        message = fallback_daily_message(
+            finance_items=finance,
+            single_stock_items=stock,
+            crypto_items=crypto,
+            ai_items=ai,
+            quotes=quotes,
+            quote_of_day="Stay focused.",
+            now_local=datetime(2026, 4, 14, 9, 0, tzinfo=ZoneInfo("Europe/Moscow")),
+        )
+
+        self.assertLessEqual(len(message), 4096)
+        # First headline is never dropped.
+        self.assertIn("News 0", message)
 
 
 class UtilsSummaryTests(unittest.TestCase):
-    def test_truncate_to_sentences_keeps_first_three(self) -> None:
+    def test_truncate_to_sentences_keeps_first_n(self) -> None:
         from digest_bot.utils import truncate_to_sentences
 
         result = truncate_to_sentences(
             "First sentence. Second sentence. Third sentence. Fourth sentence.",
-            max_sentences=3,
+            max_sentences=2,
         )
 
-        self.assertEqual("First sentence. Second sentence. Third sentence.", result)
+        self.assertEqual("First sentence. Second sentence.", result)
 
     def test_truncate_to_sentences_hard_caps_very_long_text(self) -> None:
         from digest_bot.utils import truncate_to_sentences
