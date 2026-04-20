@@ -79,6 +79,7 @@ def build_daily_translation_prompt(
         "Return strict JSON only, without markdown fences or explanations.\n"
         'Use exactly this shape: {"finance_titles":["..."],"stock_focus_titles":["..."],"crypto_titles":["..."],"ai_titles":["..."],"quote_of_day":"..."}.\n'
         "Preserve the number of titles in each array.\n"
+        "If quote_of_day contains '|' between the quote text and author, preserve that delimiter in the translated quote_of_day.\n"
         "Do not translate brand names or publication names unless there is a common Russian form.\n\n"
         f"DATA:\n{json.dumps(payload, ensure_ascii=False, indent=2)}"
     )
@@ -99,6 +100,14 @@ def fallback_daily_message(
     translated_ai_titles: list[str] | None = None,
     translated_quote_of_day: str | None = None,
 ) -> str:
+    def fmt_quote_of_day(text: str) -> list[str]:
+        raw = text.strip()
+        quote_text, separator, author = raw.partition("|")
+        lines = [f"<blockquote>{escape(quote_text.strip())}</blockquote>"]
+        if separator and author.strip():
+            lines.append(f"<i>- {escape(author.strip())}</i>")
+        return lines
+
     def fmt_news_item(index: int, item: NewsItem, translated_title: str | None) -> str:
         title = escape((translated_title or item.title).strip())
         source = escape(item.source)
@@ -182,7 +191,7 @@ def fallback_daily_message(
 
     parts.append("")
     parts.append(f"<b>{section_number}) Цитата дня</b>")
-    parts.append(escape((translated_quote_of_day or quote_of_day).strip()))
+    parts.extend(fmt_quote_of_day(translated_quote_of_day or quote_of_day))
     return "\n".join(parts)
 
 

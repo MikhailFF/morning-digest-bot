@@ -81,6 +81,7 @@ class FormatterTests(unittest.TestCase):
         self.assertIn("- Brent: 88.40 USD (-1.20%)", message)
         self.assertIn("- USD/RUB: 92.50 RUB (+0.80%)", message)
         self.assertIn("- EUR/RUB: 99.70 RUB (+0.40%)", message)
+        self.assertIn("<blockquote>Price is what you pay.</blockquote>", message)
 
     def test_fallback_daily_message_omits_stock_focus_section_when_empty(self) -> None:
         finance = [
@@ -144,13 +145,14 @@ class FormatterTests(unittest.TestCase):
             crypto_items=[],
             ai_items=ai,
             quotes=quotes,
-            quote_of_day="Price < Value",
+            quote_of_day="Price < Value | Warren Buffett",
             now_local=datetime(2026, 4, 14, 9, 0, tzinfo=ZoneInfo("Europe/Moscow")),
         )
 
         self.assertIn("Rates &lt;b&gt;stay&lt;/b&gt; high", message)
         self.assertIn("Reuters &amp; Co", message)
-        self.assertIn("Price &lt; Value", message)
+        self.assertIn("<blockquote>Price &lt; Value</blockquote>", message)
+        self.assertIn("<i>- Warren Buffett</i>", message)
         self.assertNotIn("Price < Value", message)
         self.assertIn('Rates &lt;b&gt;stay&lt;/b&gt; high (<a href="https://example.com/a">Reuters &amp; Co</a>)', message)
 
@@ -181,14 +183,15 @@ class FormatterTests(unittest.TestCase):
             crypto_items=[],
             ai_items=ai,
             quotes=quotes,
-            quote_of_day="Well done is better than well said.",
+            quote_of_day="Well done is better than well said. | Benjamin Franklin",
             now_local=datetime(2026, 4, 14, 9, 0, tzinfo=ZoneInfo("Europe/Moscow")),
             translated_finance_titles=["Акции банка растут"],
-            translated_quote_of_day="Хорошо сделано лучше, чем хорошо сказано.",
+            translated_quote_of_day="Хорошо сделано лучше, чем хорошо сказано. | Бенджамин Франклин",
         )
 
         self.assertIn('Акции банка растут (<a href="https://example.com/a">Yahoo Finance</a>)', message)
-        self.assertIn("Хорошо сделано лучше, чем хорошо сказано.", message)
+        self.assertIn("<blockquote>Хорошо сделано лучше, чем хорошо сказано.</blockquote>", message)
+        self.assertIn("<i>- Бенджамин Франклин</i>", message)
 
     def test_fallback_daily_message_stock_focus_without_ticker_change_omits_suffix(self) -> None:
         stock_focus = [
@@ -268,6 +271,7 @@ class FormatterTests(unittest.TestCase):
 
         self.assertIn('"crypto_titles": [', prompt)
         self.assertIn("US Senate advances stablecoin bill", prompt)
+        self.assertIn("preserve that delimiter", prompt)
 
 
 if __name__ == "__main__":
