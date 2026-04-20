@@ -3,23 +3,32 @@ from __future__ import annotations
 import argparse
 from datetime import datetime, timezone
 import json
+from pathlib import Path
+import re
 
 from .config import load_config
 from .fetchers import (
     AI_RSS_SOURCES,
+    CRYPTO_RSS_SOURCES,
     FINANCE_RSS_SOURCES,
+    enrich_single_stock_news,
+    fetch_brent_quote,
     fetch_crypto_quotes,
+    fetch_eur_rub_quote,
     fetch_openclaw_release,
     fetch_rss_news,
     fetch_sp500_quote,
+    fetch_usd_rub_quote,
     select_quote_of_day,
+    select_crypto_focus_news,
+    split_finance_news,
 )
 from .formatters import build_daily_prompt, build_daily_translation_prompt, build_openclaw_prompt, compact_payload, fallback_daily_message, fallback_openclaw_message
 from .llm import render_with_llm, translate_daily_content
 from .models import NewsItem, OpenClawRelease, QuoteSnapshot
 from .storage import append_fallback_log, ensure_state_dir, read_json, write_json
 from .telegram import TelegramSendResult, send_telegram_message
-from .utils import sha256_json
+from .utils import normalize_title, sha256_json
 
 SUSPICIOUS_LLM_PHRASES = (
     "not financial advice",
@@ -32,16 +41,18 @@ SUSPICIOUS_LLM_PHRASES = (
 )
 
 
-def _load_daily_fixture(path: str) -> tuple[list[NewsItem], list[NewsItem], dict[str, QuoteSnapshot], str]:
-    payload = json.loads(open(path, encoding="utf-8").read())
+def _load_daily_fixture(path: str) -> tuple[list[NewsItem], list[NewsItem], list[NewsItem], list[NewsItem], dict[str, QuoteSnapshot], str]:
+    payload = json.loads(Path(path).read_text(encoding="utf-8"))
     finance_items = [NewsItem(**item) for item in payload["finance_items"]]
+    single_stock_items = [NewsItem(**item) for item in payload.get("single_stock_items", [])]
+    crypto_items = [NewsItem(**item) for item in payload.get("crypto_items", [])]
     ai_items = [NewsItem(**item) for item in payload["ai_items"]]
     quotes = {key: QuoteSnapshot(**value) for key, value in payload["quotes"].items()}
-    return finance_items, ai_items, quotes, payload["quote_of_day"]
+    return finance_items, single_stock_items, crypto_items, ai_items, quotes, payload["quote_of_day"]
 
 
 def _load_release_fixture(path: str) -> OpenClawRelease:
-    payload = json.loads(open(path, encoding="utf-8").read())
+    payload = json.loads(Path(path).read_text(encoding="utf-8"))
     return OpenClawRelease(**payload)
 
 
@@ -68,10 +79,9 @@ def _validate_daily_message(message: str) -> tuple[bool, str]:
     if "<" in stripped or ">" in stripped:
         return False, "LLM output contains HTML-like markup."
 
-    required_sections = ("1)", "2)", "3)", "4)")
-    missing_sections = [section for section in required_sections if section not in stripped]
-    if missing_sections:
-        return False, f"LLM output is missing required sections: {', '.join(missing_sections)}."
+    section_numbers = [int(match.group(1)) for match in re.finditer(r"(?m)^(\d+)\)", stripped)]
+    if len(section_numbers) < 4 or len(section_numbers) > 6 or section_numbers != list(range(1, len(section_numbers) + 1)):
+        return False, "LLM output is missing required sections or section numbering is invalid."
 
     if len([line for line in stripped.splitlines() if line.strip()]) < 8:
         return False, "LLM output is too short for a full digest."
@@ -82,29 +92,41 @@ def _validate_daily_message(message: str) -> tuple[bool, str]:
 def _build_daily_message(
     config,
     finance_items: list[NewsItem],
+    single_stock_items: list[NewsItem],
+    crypto_items: list[NewsItem],
     ai_items: list[NewsItem],
     quotes: dict[str, QuoteSnapshot],
     quote_of_day: str,
     now_local: datetime,
 ) -> str:
     translated_finance_titles: list[str] | None = None
+    translated_stock_focus_titles: list[str] | None = None
+    translated_crypto_titles: list[str] | None = None
     translated_ai_titles: list[str] | None = None
     translated_quote_of_day: str | None = None
 
     translation_payload = translate_daily_content(
         config,
-        build_daily_translation_prompt(finance_items, ai_items, quote_of_day),
+        build_daily_translation_prompt(finance_items, single_stock_items, crypto_items, ai_items, quote_of_day),
     )
     if translation_payload:
         finance_payload = translation_payload.get("finance_titles")
+        stock_focus_payload = translation_payload.get("stock_focus_titles")
+        crypto_payload = translation_payload.get("crypto_titles")
         ai_payload = translation_payload.get("ai_titles")
         quote_payload = translation_payload.get("quote_of_day")
 
         expected_finance_count = min(len(finance_items), 5)
+        expected_stock_focus_count = min(len(single_stock_items), 3)
+        expected_crypto_count = min(len(crypto_items), 3)
         expected_ai_count = min(len(ai_items), 3)
 
         if isinstance(finance_payload, list) and len(finance_payload) == expected_finance_count:
             translated_finance_titles = [str(item).strip() for item in finance_payload]
+        if isinstance(stock_focus_payload, list) and len(stock_focus_payload) == expected_stock_focus_count:
+            translated_stock_focus_titles = [str(item).strip() for item in stock_focus_payload]
+        if isinstance(crypto_payload, list) and len(crypto_payload) == expected_crypto_count:
+            translated_crypto_titles = [str(item).strip() for item in crypto_payload]
         if isinstance(ai_payload, list) and len(ai_payload) == expected_ai_count:
             translated_ai_titles = [str(item).strip() for item in ai_payload]
         if isinstance(quote_payload, str) and quote_payload.strip():
@@ -112,11 +134,15 @@ def _build_daily_message(
 
     return fallback_daily_message(
         finance_items,
+        single_stock_items,
+        crypto_items,
         ai_items,
         quotes,
         quote_of_day,
         now_local,
         translated_finance_titles=translated_finance_titles,
+        translated_stock_focus_titles=translated_stock_focus_titles,
+        translated_crypto_titles=translated_crypto_titles,
         translated_ai_titles=translated_ai_titles,
         translated_quote_of_day=translated_quote_of_day,
     )
@@ -131,7 +157,7 @@ def _log_send_failure(config, name: str, send_result: TelegramSendResult, messag
     return str(log_path)
 
 
-def run_daily(dry_run: bool, fixture_path: str | None) -> int:
+def run_daily(dry_run: bool, fixture_path: str | None, force_send: bool = False) -> int:
     config = load_config()
     ensure_state_dir(config.state_dir)
     now_utc = datetime.now(timezone.utc)
@@ -142,27 +168,40 @@ def run_daily(dry_run: bool, fixture_path: str | None) -> int:
         return 1
 
     if fixture_path:
-        finance_items, ai_items, quotes, quote_of_day = _load_daily_fixture(fixture_path)
+        finance_items, single_stock_items, crypto_items, ai_items, quotes, quote_of_day = _load_daily_fixture(fixture_path)
     else:
-        finance_items = fetch_rss_news(FINANCE_RSS_SOURCES, now_utc, limit=12)
+        finance_candidates = fetch_rss_news(FINANCE_RSS_SOURCES, now_utc, limit=18)
+        crypto_candidates = fetch_rss_news([*CRYPTO_RSS_SOURCES, *FINANCE_RSS_SOURCES], now_utc, limit=30)
+        crypto_items = select_crypto_focus_news(crypto_candidates)
+        crypto_urls = {item.url for item in crypto_items}
+        crypto_titles = {normalize_title(item.title) for item in crypto_items}
+        finance_candidates = [
+            item
+            for item in finance_candidates
+            if item.url not in crypto_urls and normalize_title(item.title) not in crypto_titles
+        ]
+        finance_items, single_stock_items = split_finance_news(finance_candidates)
+        single_stock_items = enrich_single_stock_news(single_stock_items)
         ai_items = fetch_rss_news(AI_RSS_SOURCES, now_utc, limit=8)
         quotes = fetch_crypto_quotes()
+        quotes["BRENT"] = fetch_brent_quote()
+        quotes["USDRUB"] = fetch_usd_rub_quote()
+        quotes["EURRUB"] = fetch_eur_rub_quote()
         quotes["SPX"] = fetch_sp500_quote()
         quote_of_day = select_quote_of_day(config.quotes_file, now_local.strftime("%Y-%m-%d"))
 
-    payload = compact_payload(finance_items, ai_items, quotes, quote_of_day)
+    payload = compact_payload(finance_items, single_stock_items, crypto_items, ai_items, quotes, quote_of_day)
     digest_hash = sha256_json(payload)
     digest_state_path = config.state_dir / "daily_digest_state.json"
     state = read_json(digest_state_path)
+    if not force_send and state.get("last_date") == now_local.strftime("%Y-%m-%d"):
+        print("Daily digest already sent today; skipping duplicate send.")
+        return 0
 
-    message = _build_daily_message(config, finance_items, ai_items, quotes, quote_of_day, now_local)
+    message = _build_daily_message(config, finance_items, single_stock_items, crypto_items, ai_items, quotes, quote_of_day, now_local)
 
     if dry_run:
         print(message)
-        return 0
-
-    if state.get("last_digest_hash") == digest_hash and state.get("last_date") == now_local.strftime("%Y-%m-%d"):
-        print("Digest unchanged for today; skipping duplicate send.")
         return 0
 
     send_result = send_telegram_message(config, message)
@@ -237,6 +276,7 @@ def build_parser() -> argparse.ArgumentParser:
     daily = subparsers.add_parser("daily", help="Run daily digest")
     daily.add_argument("--dry-run", action="store_true")
     daily.add_argument("--fixture", help="Load digest payload from local JSON fixture")
+    daily.add_argument("--force", action="store_true", help="Bypass daily duplicate protection for manual sends")
 
     weekly = subparsers.add_parser("weekly-openclaw", help="Run weekly OpenClaw release digest")
     weekly.add_argument("--dry-run", action="store_true")
@@ -249,7 +289,7 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.command == "daily":
-        return run_daily(dry_run=args.dry_run, fixture_path=args.fixture)
+        return run_daily(dry_run=args.dry_run, fixture_path=args.fixture, force_send=args.force)
     if args.command == "weekly-openclaw":
         return run_weekly_openclaw(dry_run=args.dry_run, fixture_path=args.fixture)
     parser.error(f"Unknown command: {args.command}")

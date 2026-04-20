@@ -10,6 +10,9 @@ class NewsItem:
     published_at: str
     url: str
     summary: str
+    company_name: str | None = None
+    ticker: str | None = None
+    price_change_24h: float | None = None
 
 
 @dataclass(frozen=True)

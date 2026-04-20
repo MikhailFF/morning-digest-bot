@@ -2,8 +2,14 @@ name: Daily Digest
 
 on:
   schedule:
-    - cron: "0 6 * * *"
+    - cron: "*/15 6-8 * * *"
   workflow_dispatch:
+    inputs:
+      force_send:
+        description: "Send digest even if it was already sent today"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -61,9 +67,13 @@ jobs:
           export OPENROUTER_MODEL="${OPENROUTER_MODEL:-openai/gpt-4.1-mini}"
           export OPENROUTER_SITE_URL="${OPENROUTER_SITE_URL:-https://github.com/MikhailFF/morning-digest-bot}"
           export OPENROUTER_APP_NAME="${OPENROUTER_APP_NAME:-morning-digest-bot}"
+          daily_args=()
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ github.event.inputs.force_send }}" == "true" ]]; then
+            daily_args+=(--force)
+          fi
           for attempt in 1 2 3; do
             echo "daily digest attempt ${attempt}"
-            if PYTHONPATH=src python3 -m digest_bot.main daily; then
+            if PYTHONPATH=src python3 -m digest_bot.main daily "${daily_args[@]}"; then
               exit 0
             fi
 
