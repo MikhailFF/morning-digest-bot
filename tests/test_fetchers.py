@@ -1,9 +1,17 @@
 from __future__ import annotations
 
+import io
 import unittest
+from datetime import datetime, timezone
 from unittest.mock import patch
 
-from digest_bot.fetchers import enrich_single_stock_news, select_crypto_focus_news, split_finance_news
+from digest_bot.fetchers import (
+    enrich_single_stock_news,
+    fetch_rss_news,
+    fetch_rss_news_with_fallback,
+    select_crypto_focus_news,
+    split_finance_news,
+)
 from digest_bot.models import NewsItem, QuoteSnapshot
 
 
@@ -153,6 +161,99 @@ class FetcherTests(unittest.TestCase):
 
         self.assertEqual(3, len(selected))
         self.assertEqual(1, sum("stablecoin bill" in item.title.lower() for item in selected))
+
+
+def _rss_xml(items: list[tuple[str, str, str]]) -> bytes:
+    body = "".join(
+        f"<item><title>{t}</title><link>{l}</link><pubDate>{d}</pubDate></item>"
+        for t, l, d in items
+    )
+    return f"<rss><channel>{body}</channel></rss>".encode("utf-8")
+
+
+class FetchRssNewsTests(unittest.TestCase):
+    def test_fetch_rss_news_logs_failure_and_continues(self) -> None:
+        now = datetime(2026, 4, 20, 10, 0, tzinfo=timezone.utc)
+        good_xml = _rss_xml(
+            [("CNBC item", "https://example.com/a", "Mon, 20 Apr 2026 09:00:00 +0000")]
+        )
+
+        def fake_get(url: str) -> bytes:
+            if "broken" in url:
+                raise ValueError("boom")
+            return good_xml
+
+        stderr = io.StringIO()
+        with patch("digest_bot.fetchers._http_get", side_effect=fake_get), patch(
+            "sys.stderr", stderr
+        ):
+            items = fetch_rss_news(
+                [("Broken", "https://broken.example.com/rss"), ("Good", "https://good.example.com/rss")],
+                now_utc=now,
+                limit=5,
+            )
+
+        self.assertEqual(["CNBC item"], [item.title for item in items])
+        self.assertIn("[rss] Broken", stderr.getvalue())
+        self.assertIn("ValueError: boom", stderr.getvalue())
+
+    def test_fetch_rss_news_respects_max_age_hours(self) -> None:
+        now = datetime(2026, 4, 20, 10, 0, tzinfo=timezone.utc)
+        xml = _rss_xml(
+            [
+                ("Fresh", "https://example.com/fresh", "Mon, 20 Apr 2026 09:00:00 +0000"),
+                ("Stale", "https://example.com/stale", "Fri, 17 Apr 2026 09:00:00 +0000"),
+            ]
+        )
+
+        with patch("digest_bot.fetchers._http_get", return_value=xml):
+            tight = fetch_rss_news([("Src", "https://example.com")], now, limit=10, max_age_hours=24)
+            wide = fetch_rss_news([("Src", "https://example.com")], now, limit=10, max_age_hours=96)
+
+        self.assertEqual(["Fresh"], [item.title for item in tight])
+        self.assertEqual({"Fresh", "Stale"}, {item.title for item in wide})
+
+    def test_fetch_rss_news_with_fallback_expands_window_when_sparse(self) -> None:
+        now = datetime(2026, 4, 20, 10, 0, tzinfo=timezone.utc)
+        xml = _rss_xml(
+            [
+                ("Fresh 1", "https://example.com/1", "Mon, 20 Apr 2026 09:00:00 +0000"),
+                ("Older 2d", "https://example.com/2", "Sat, 18 Apr 2026 08:00:00 +0000"),
+                ("Older 3d", "https://example.com/3", "Fri, 17 Apr 2026 11:00:00 +0000"),
+            ]
+        )
+
+        with patch("digest_bot.fetchers._http_get", return_value=xml):
+            items = fetch_rss_news_with_fallback(
+                [("Src", "https://example.com")],
+                now_utc=now,
+                limit=10,
+                min_items=3,
+                fallback_hours=(24, 48, 72),
+            )
+
+        self.assertEqual(
+            {"Fresh 1", "Older 2d", "Older 3d"}, {item.title for item in items}
+        )
+
+    def test_fetch_rss_news_with_fallback_returns_best_effort_when_nothing_meets_min(
+        self,
+    ) -> None:
+        now = datetime(2026, 4, 20, 10, 0, tzinfo=timezone.utc)
+        xml = _rss_xml(
+            [("Only one", "https://example.com/only", "Mon, 20 Apr 2026 09:00:00 +0000")]
+        )
+
+        with patch("digest_bot.fetchers._http_get", return_value=xml):
+            items = fetch_rss_news_with_fallback(
+                [("Src", "https://example.com")],
+                now_utc=now,
+                limit=10,
+                min_items=5,
+                fallback_hours=(24, 48, 72),
+            )
+
+        self.assertEqual(["Only one"], [item.title for item in items])
 
 
 if __name__ == "__main__":

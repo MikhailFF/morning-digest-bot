@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import datetime, timezone
+import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterable
 from urllib.parse import quote
@@ -10,19 +11,27 @@ from urllib.request import Request, urlopen
 import xml.etree.ElementTree as ET
 
 from .models import NewsItem, OpenClawRelease, QuoteSnapshot
-from .utils import clean_html, normalize_title, parse_rss_datetime, within_last_24h
+from .utils import clean_html, normalize_title, parse_rss_datetime
 
 USER_AGENT = "morning-digest-bot/1.0"
 
+# Feeds verified live on 2026-04-20. Dead sources removed:
+# - Reuters Markets (feeds.reuters.com) - DNS gone.
+# - The Verge AI (www.theverge.com/ai-.../rss/index.xml) - HTTP 404.
+# - a16z general feed - HTTP 404.
 FINANCE_RSS_SOURCES = [
-    ("Reuters Markets", "https://feeds.reuters.com/reuters/businessNews"),
     ("CNBC Finance", "https://www.cnbc.com/id/100003114/device/rss/rss.html"),
     ("Yahoo Finance", "https://finance.yahoo.com/news/rssindex"),
+    ("MarketWatch", "https://www.marketwatch.com/rss/topstories"),
+    ("FT Markets", "https://www.ft.com/markets?format=rss"),
 ]
 
 AI_RSS_SOURCES = [
     ("MIT Technology Review", "https://www.technologyreview.com/topic/artificial-intelligence/feed"),
-    ("The Verge AI", "https://www.theverge.com/ai-artificial-intelligence/rss/index.xml"),
+    ("Ars Technica AI", "https://arstechnica.com/ai/feed/"),
+    ("TechCrunch AI", "https://techcrunch.com/category/artificial-intelligence/feed/"),
+    ("Wired AI", "https://www.wired.com/feed/tag/ai/latest/rss"),
+    ("OpenAI Blog", "https://openai.com/blog/rss.xml"),
     ("Hugging Face Blog", "https://huggingface.co/blog/feed.xml"),
 ]
 
@@ -30,7 +39,6 @@ CRYPTO_RSS_SOURCES = [
     ("The Block", "https://www.theblock.co/rss.xml"),
     ("Axios", "https://www.axios.com/feeds/feed.rss"),
     ("NYT Business", "https://rss.nytimes.com/services/xml/rss/nyt/Business.xml"),
-    ("a16z", "https://a16z.com/feed/"),
 ]
 
 STOCK_FOCUS_LIMIT = 3
@@ -337,16 +345,26 @@ def _http_get(url: str) -> bytes:
         return response.read()
 
 
-def fetch_rss_news(sources: Iterable[tuple[str, str]], now_utc: datetime, limit: int) -> list[NewsItem]:
+def fetch_rss_news(
+    sources: Iterable[tuple[str, str]],
+    now_utc: datetime,
+    limit: int,
+    *,
+    max_age_hours: int = 24,
+) -> list[NewsItem]:
     items: list[NewsItem] = []
     seen_urls: set[str] = set()
     seen_titles: set[str] = set()
+    earliest = now_utc - timedelta(hours=max_age_hours)
 
     for source_name, url in sources:
         try:
             payload = _http_get(url)
             root = ET.fromstring(payload)
-        except Exception:
+        except Exception as exc:
+            # Visibility: dead or temporarily broken feeds were previously
+            # silently skipped, so empty sections looked mysterious.
+            print(f"[rss] {source_name} ({url}): {type(exc).__name__}: {exc}", file=sys.stderr)
             continue
 
         for node in root.findall(".//item") + root.findall(".//{http://www.w3.org/2005/Atom}entry"):
@@ -378,7 +396,7 @@ def fetch_rss_news(sources: Iterable[tuple[str, str]], now_utc: datetime, limit:
             )
             published = parse_rss_datetime(published_raw)
 
-            if not title or not link or not within_last_24h(published, now_utc):
+            if not title or not link or published is None or published < earliest:
                 continue
 
             normalized_title = normalize_title(title)
@@ -399,6 +417,31 @@ def fetch_rss_news(sources: Iterable[tuple[str, str]], now_utc: datetime, limit:
 
     items.sort(key=lambda item: item.published_at, reverse=True)
     return items[:limit]
+
+
+def fetch_rss_news_with_fallback(
+    sources: Iterable[tuple[str, str]],
+    now_utc: datetime,
+    *,
+    limit: int,
+    min_items: int,
+    fallback_hours: tuple[int, ...] = (24, 48, 72),
+) -> list[NewsItem]:
+    """Fetch RSS with progressively wider windows until we have enough items.
+
+    Real-world feeds (MIT TR, Hugging Face Blog, specialist sites) can publish
+    less than once per 24h. When the primary window is too sparse we relax the
+    freshness requirement instead of showing an empty section.
+    """
+    sources = list(sources)
+    best: list[NewsItem] = []
+    for hours in fallback_hours:
+        candidates = fetch_rss_news(sources, now_utc, limit=limit, max_age_hours=hours)
+        if len(candidates) >= len(best):
+            best = candidates
+        if len(candidates) >= min_items:
+            return candidates
+    return best
 
 
 def _contains_any(haystack: str, terms: tuple[str, ...]) -> bool:
