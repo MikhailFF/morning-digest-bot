@@ -81,7 +81,7 @@ class LlmTests(unittest.TestCase):
                     "choices": [
                         {
                             "message": {
-                                "content": '{"finance_titles":["Перевод"],"ai_titles":[],"quote_of_day":"Цитата"}'
+                                "content": '{"finance_titles":["Перевод"],"stock_focus_titles":[],"crypto_titles":[],"ai_titles":[],"quote_of_day":"Цитата"}'
                             }
                         }
                     ]
@@ -91,7 +91,7 @@ class LlmTests(unittest.TestCase):
         with patch("digest_bot.llm.urlopen", side_effect=fake_urlopen):
             result = render_with_llm(config, "translate this")
 
-        self.assertEqual('{"finance_titles":["Перевод"],"ai_titles":[],"quote_of_day":"Цитата"}', result)
+        self.assertEqual('{"finance_titles":["Перевод"],"stock_focus_titles":[],"crypto_titles":[],"ai_titles":[],"quote_of_day":"Цитата"}', result)
         self.assertEqual(f"{OPENROUTER_API_BASE}/chat/completions", seen_request["url"])
         self.assertEqual("openai/gpt-4.1-mini", seen_request["data"]["model"])
         self.assertEqual("translate this", seen_request["data"]["messages"][0]["content"])

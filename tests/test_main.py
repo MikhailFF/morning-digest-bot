@@ -26,6 +26,50 @@ class MainTests(unittest.TestCase):
         self.assertTrue(ok)
         self.assertEqual("", error)
 
+    def test_validate_daily_message_accepts_structure_with_stock_focus_section(self) -> None:
+        ok, error = _validate_daily_message(
+            "\n".join(
+                [
+                    "1) Финансы и экономика",
+                    "1. Новость (Reuters)",
+                    "2) Акции в фокусе",
+                    "1. Новость (+5.00% за сутки) (Yahoo Finance)",
+                    "3) ИИ",
+                    "1. Новость (The Verge AI)",
+                    "4) Котировки",
+                    "- BTC: 80000 USD (+1.00%)",
+                    "5) Цитата дня",
+                    "Stay focused.",
+                ]
+            )
+        )
+
+        self.assertTrue(ok)
+        self.assertEqual("", error)
+
+    def test_validate_daily_message_accepts_structure_with_stock_and_crypto_sections(self) -> None:
+        ok, error = _validate_daily_message(
+            "\n".join(
+                [
+                    "1) Финансы и экономика",
+                    "1. Новость (Reuters)",
+                    "2) Акции в фокусе",
+                    "1. Новость (+5.00% за сутки) (Yahoo Finance)",
+                    "3) Крипто в фокусе",
+                    "1. Новость (Axios)",
+                    "4) ИИ",
+                    "1. Новость (The Verge AI)",
+                    "5) Котировки",
+                    "- BTC: 80000 USD (+1.00%)",
+                    "6) Цитата дня",
+                    "Stay focused.",
+                ]
+            )
+        )
+
+        self.assertTrue(ok)
+        self.assertEqual("", error)
+
     def test_validate_daily_message_rejects_suspicious_phrase(self) -> None:
         ok, error = _validate_daily_message(
             "\n".join(
