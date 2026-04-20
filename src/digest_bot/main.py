@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 from datetime import datetime, timezone
 import json
+from pathlib import Path
 import re
 
 from .config import load_config
@@ -41,7 +42,7 @@ SUSPICIOUS_LLM_PHRASES = (
 
 
 def _load_daily_fixture(path: str) -> tuple[list[NewsItem], list[NewsItem], list[NewsItem], list[NewsItem], dict[str, QuoteSnapshot], str]:
-    payload = json.loads(open(path, encoding="utf-8").read())
+    payload = json.loads(Path(path).read_text(encoding="utf-8"))
     finance_items = [NewsItem(**item) for item in payload["finance_items"]]
     single_stock_items = [NewsItem(**item) for item in payload.get("single_stock_items", [])]
     crypto_items = [NewsItem(**item) for item in payload.get("crypto_items", [])]
@@ -51,7 +52,7 @@ def _load_daily_fixture(path: str) -> tuple[list[NewsItem], list[NewsItem], list
 
 
 def _load_release_fixture(path: str) -> OpenClawRelease:
-    payload = json.loads(open(path, encoding="utf-8").read())
+    payload = json.loads(Path(path).read_text(encoding="utf-8"))
     return OpenClawRelease(**payload)
 
 
@@ -156,7 +157,7 @@ def _log_send_failure(config, name: str, send_result: TelegramSendResult, messag
     return str(log_path)
 
 
-def run_daily(dry_run: bool, fixture_path: str | None) -> int:
+def run_daily(dry_run: bool, fixture_path: str | None, force_send: bool = False) -> int:
     config = load_config()
     ensure_state_dir(config.state_dir)
     now_utc = datetime.now(timezone.utc)
@@ -193,7 +194,7 @@ def run_daily(dry_run: bool, fixture_path: str | None) -> int:
     digest_hash = sha256_json(payload)
     digest_state_path = config.state_dir / "daily_digest_state.json"
     state = read_json(digest_state_path)
-    if state.get("last_date") == now_local.strftime("%Y-%m-%d"):
+    if not force_send and state.get("last_date") == now_local.strftime("%Y-%m-%d"):
         print("Daily digest already sent today; skipping duplicate send.")
         return 0
 
@@ -275,6 +276,7 @@ def build_parser() -> argparse.ArgumentParser:
     daily = subparsers.add_parser("daily", help="Run daily digest")
     daily.add_argument("--dry-run", action="store_true")
     daily.add_argument("--fixture", help="Load digest payload from local JSON fixture")
+    daily.add_argument("--force", action="store_true", help="Bypass daily duplicate protection for manual sends")
 
     weekly = subparsers.add_parser("weekly-openclaw", help="Run weekly OpenClaw release digest")
     weekly.add_argument("--dry-run", action="store_true")
@@ -287,7 +289,7 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.command == "daily":
-        return run_daily(dry_run=args.dry_run, fixture_path=args.fixture)
+        return run_daily(dry_run=args.dry_run, fixture_path=args.fixture, force_send=args.force)
     if args.command == "weekly-openclaw":
         return run_weekly_openclaw(dry_run=args.dry_run, fixture_path=args.fixture)
     parser.error(f"Unknown command: {args.command}")
