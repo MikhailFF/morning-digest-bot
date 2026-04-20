@@ -17,6 +17,7 @@ from .fetchers import (
     fetch_eur_rub_quote,
     fetch_openclaw_release,
     fetch_rss_news,
+    fetch_rss_news_with_fallback,
     fetch_sp500_quote,
     fetch_usd_rub_quote,
     select_quote_of_day,
@@ -171,7 +172,11 @@ def run_daily(dry_run: bool, fixture_path: str | None, force_send: bool = False)
         finance_items, single_stock_items, crypto_items, ai_items, quotes, quote_of_day = _load_daily_fixture(fixture_path)
     else:
         finance_candidates = fetch_rss_news(FINANCE_RSS_SOURCES, now_utc, limit=18)
-        crypto_candidates = fetch_rss_news([*CRYPTO_RSS_SOURCES, *FINANCE_RSS_SOURCES], now_utc, limit=30)
+        # Crypto pool prefers dedicated crypto feeds but still looks at general
+        # finance feeds for policy/regulation cross-coverage.
+        crypto_candidates = fetch_rss_news(
+            [*CRYPTO_RSS_SOURCES, *FINANCE_RSS_SOURCES], now_utc, limit=40
+        )
         crypto_items = select_crypto_focus_news(crypto_candidates)
         crypto_urls = {item.url for item in crypto_items}
         crypto_titles = {normalize_title(item.title) for item in crypto_items}
@@ -182,7 +187,11 @@ def run_daily(dry_run: bool, fixture_path: str | None, force_send: bool = False)
         ]
         finance_items, single_stock_items = split_finance_news(finance_candidates)
         single_stock_items = enrich_single_stock_news(single_stock_items)
-        ai_items = fetch_rss_news(AI_RSS_SOURCES, now_utc, limit=8)
+        # AI feeds often publish less than daily; expand window until we have
+        # at least 3 fresh items, capped at 72h.
+        ai_items = fetch_rss_news_with_fallback(
+            AI_RSS_SOURCES, now_utc, limit=8, min_items=3, fallback_hours=(24, 48, 72)
+        )
         quotes = fetch_crypto_quotes()
         quotes["BRENT"] = fetch_brent_quote()
         quotes["USDRUB"] = fetch_usd_rub_quote()
