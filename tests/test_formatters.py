@@ -67,12 +67,12 @@ class FormatterTests(unittest.TestCase):
             quote_of_day="Price is what you pay.",
             now_local=datetime(2026, 4, 14, 9, 0, tzinfo=ZoneInfo("Europe/Moscow")),
         )
-        self.assertIn("1) Финансы и экономика", message)
-        self.assertIn("2) Акции в фокусе", message)
-        self.assertIn("3) Крипто в фокусе", message)
-        self.assertIn("4) ИИ", message)
-        self.assertIn("5) Котировки", message)
-        self.assertIn("6) Цитата дня", message)
+        self.assertIn("1) 🪙 Финансы и экономика", message)
+        self.assertIn("2) 💸 Акции в фокусе", message)
+        self.assertIn("3) 💎 Крипта в фокусе", message)
+        self.assertIn("4) 🤖 ИИ", message)
+        self.assertIn("5) 📈 Котировки", message)
+        self.assertIn("6) 👨🏻‍🎓 Цитата дня", message)
         self.assertIn("<b>Дайджест на", message)
         self.assertIn('Rates stay high (<a href="https://example.com/a">Reuters</a>)', message)
         self.assertIn('Allbirds stock surges after AI pivot (+6.20% за сутки) (<a href="https://example.com/stock">Yahoo Finance</a>)', message)
@@ -114,9 +114,9 @@ class FormatterTests(unittest.TestCase):
         )
 
         self.assertNotIn("Акции в фокусе", message)
-        self.assertIn("2) ИИ", message)
-        self.assertIn("3) Котировки", message)
-        self.assertIn("4) Цитата дня", message)
+        self.assertIn("2) 🤖 ИИ", message)
+        self.assertIn("3) 📈 Котировки", message)
+        self.assertIn("4) 👨🏻‍🎓 Цитата дня", message)
 
     def test_fallback_daily_message_escapes_html(self) -> None:
         finance = [
@@ -248,9 +248,9 @@ class FormatterTests(unittest.TestCase):
         )
 
         self.assertNotIn("Крипто в фокусе", message)
-        self.assertIn("2) ИИ", message)
-        self.assertIn("3) Котировки", message)
-        self.assertIn("4) Цитата дня", message)
+        self.assertIn("2) 🤖 ИИ", message)
+        self.assertIn("3) 📈 Котировки", message)
+        self.assertIn("4) 👨🏻‍🎓 Цитата дня", message)
 
     def test_build_daily_translation_prompt_includes_crypto_titles(self) -> None:
         prompt = build_daily_translation_prompt(
